@@ -1,0 +1,61 @@
+{
+  "name": "@tetherto/wdk-worklet-bundler",
+  "version": "1.0.0-beta.1",
+  "description": "CLI tool for generating WDK worklet bundles",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "wdk-worklet-bundler": "./bin/wdk-worklet-bundler.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tetherto/wdk-worklet-bundler.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tetherto/wdk-worklet-bundler/issues"
+  },
+  "homepage": "https://github.com/tetherto/wdk-worklet-bundler#readme",
+  "keywords": [
+    "wdk",
+    "bare-runtime",
+    "bundle",
+    "worklet",
+    "hrpc",
+    "react-native",
+    "crypto",
+    "wallet"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/cli.ts --format cjs --dts --clean",
+    "dev": "tsup src/index.ts src/cli.ts --format cjs --dts --watch",
+    "lint": "eslint src",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "prepublishOnly": "npm run build && npm run test",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "ajv": "^8.17.1",
+    "hyperschema": "^1.12.4",
+    "hrpc": "^4.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "tsup": "^8.3.5",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0"
+}
