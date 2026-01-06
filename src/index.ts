@@ -9,8 +9,8 @@ export { loadConfig } from './config/loader'
 export type { WdkConfig, ResolvedConfig, NetworkConfig } from './config/types'
 
 // Validators
-export { validateDependencies } from './validators/dependencies'
-export type { ModuleInfo, ValidationResult } from './validators/dependencies'
+export { validateDependencies, installDependencies, uninstallDependencies, detectPackageManager, generateInstallCommand, generateUninstallCommand } from './validators/dependencies'
+export type { ModuleInfo, ValidationResult, InstallResult, UninstallResult } from './validators/dependencies'
 
 // Bundler
 export { generateBundle, generateSourceFiles } from './bundler'

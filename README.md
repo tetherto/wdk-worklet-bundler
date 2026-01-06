@@ -18,11 +18,8 @@ wdk-worklet-bundler init
 
 # 2. Edit wdk.config.js to configure your networks
 
-# 3. Install WDK modules
-npm install @tetherto/wdk @tetherto/wdk-wallet-evm-erc-4337
-
-# 4. Generate the bundle
-wdk-worklet-bundler generate
+# 3. Generate the bundle (--install auto-installs, --cleanup removes them after)
+wdk-worklet-bundler generate --install --cleanup
 ```
 
 ## Commands
@@ -42,12 +39,14 @@ wdk-worklet-bundler init --from-pear-wrk-wdk ./path  # Migrate from pear-wrk-wdk
 Generate the WDK bundle from your configuration.
 
 ```bash
-wdk-worklet-bundler generate                # Full build
-wdk-worklet-bundler generate --source-only  # Generate source files only (skip bare-pack)
-wdk-worklet-bundler generate --dry-run      # Preview what will be generated
-wdk-worklet-bundler generate --verbose      # Show detailed output
-wdk-worklet-bundler generate --no-types     # Skip TypeScript declaration generation
-wdk-worklet-bundler generate -c custom.config.js  # Use custom config file
+wdk-worklet-bundler generate                       # Full build
+wdk-worklet-bundler generate --install             # Auto-install missing dependencies
+wdk-worklet-bundler generate --install --cleanup   # Install, build, then remove dependencies
+wdk-worklet-bundler generate --source-only         # Generate source files only (skip bare-pack)
+wdk-worklet-bundler generate --dry-run             # Preview what will be generated
+wdk-worklet-bundler generate --verbose             # Show detailed output
+wdk-worklet-bundler generate --no-types            # Skip TypeScript declaration generation
+wdk-worklet-bundler generate -c custom.config.js   # Use custom config file
 ```
 
 ### `wdk-worklet-bundler validate`

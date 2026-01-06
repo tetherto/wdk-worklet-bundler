@@ -229,6 +229,107 @@ module.exports = {
       expect(output).toContain('missing dependencies');
     });
 
+    it('should suggest --install flag when dependencies are missing', () => {
+      const config = `
+module.exports = {
+  modules: {
+    core: '@tetherto/wdk',
+  },
+  networks: {
+    ethereum: {
+      module: 'core',
+      chainId: 1,
+      blockchain: 'ethereum',
+    },
+  },
+};
+`;
+      fs.writeFileSync(path.join(tempDir, 'wdk.config.js'), config);
+
+      const output = runCli('generate');
+
+      expect(output).toContain('--install');
+    });
+
+    it('should attempt install with --install flag', () => {
+      const config = `
+module.exports = {
+  modules: {
+    core: '@tetherto/wdk',
+  },
+  networks: {
+    ethereum: {
+      module: 'core',
+      chainId: 1,
+      blockchain: 'ethereum',
+    },
+  },
+};
+`;
+      fs.writeFileSync(path.join(tempDir, 'wdk.config.js'), config);
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify({ name: 'test-project', version: '1.0.0' })
+      );
+
+      const output = runCli('generate --install');
+
+      // Should attempt to install
+      expect(output).toContain('Installing missing dependencies');
+    });
+
+    it('should warn about local paths that cannot be auto-installed', () => {
+      const config = `
+module.exports = {
+  modules: {
+    core: './local-wdk-module',
+  },
+  networks: {
+    ethereum: {
+      module: 'core',
+      chainId: 1,
+      blockchain: 'ethereum',
+    },
+  },
+};
+`;
+      fs.writeFileSync(path.join(tempDir, 'wdk.config.js'), config);
+
+      const output = runCli('generate --install');
+
+      expect(output).toContain('Failed to install');
+    });
+
+    it('should inform when --cleanup is used without --install', () => {
+      const config = `
+module.exports = {
+  modules: {
+    core: '@tetherto/wdk',
+  },
+  networks: {
+    ethereum: {
+      module: 'core',
+      chainId: 1,
+      blockchain: 'ethereum',
+    },
+  },
+};
+`;
+      fs.writeFileSync(path.join(tempDir, 'wdk.config.js'), config);
+
+      // Create fake node_modules so validation passes
+      const wdkPath = path.join(tempDir, 'node_modules', '@tetherto', 'wdk');
+      fs.mkdirSync(wdkPath, { recursive: true });
+      fs.writeFileSync(
+        path.join(wdkPath, 'package.json'),
+        JSON.stringify({ name: '@tetherto/wdk', version: '1.0.0' })
+      );
+
+      const output = runCli('generate --cleanup --dry-run');
+
+      expect(output).toContain('No dependencies to clean up');
+    });
+
     it('should generate source files with --source-only', () => {
       // Create a valid config
       const config = `

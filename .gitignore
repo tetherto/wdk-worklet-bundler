@@ -29,3 +29,6 @@ npm-debug.log*
 
 # Documentation
 docs/
+
+# AI assistants
+CLAUDE.md

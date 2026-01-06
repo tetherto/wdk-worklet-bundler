@@ -20,14 +20,18 @@ program
   .description('Generate WDK bundle from configuration')
   .option('-c, --config <path>', 'Path to config file')
   .option('--install', 'Auto-install missing dependencies')
+  .option('--cleanup', 'Remove installed dependencies after bundle is created (use with --install)')
   .option('--dry-run', 'Show what would be generated without building')
   .option('-v, --verbose', 'Show verbose output')
   .option('--no-types', 'Skip TypeScript declaration generation')
   .option('--source-only', 'Only generate source files (skip bare-pack)')
   .action(async (options) => {
     const { loadConfig } = await import('./config/loader')
-    const { validateDependencies } = await import('./validators/dependencies')
+    const { validateDependencies, installDependencies, uninstallDependencies } = await import('./validators/dependencies')
     const { generateBundle, generateSourceFiles } = await import('./bundler')
+
+    // Track packages installed by --install for potential cleanup
+    let installedPackages: string[] = []
 
     try {
       console.log('\n🔍 Reading configuration...\n')
@@ -35,7 +39,7 @@ program
       console.log(`  Config: ${config.configPath}`)
 
       console.log('\n📦 Checking dependencies...\n')
-      const validation = validateDependencies(config.modules, config.projectRoot)
+      let validation = validateDependencies(config.modules, config.projectRoot)
 
       for (const mod of validation.installed) {
         const version = mod.isLocal ? 'local' : `v${mod.version}`
@@ -46,9 +50,51 @@ program
         console.log(`  ✗ ${mod} — NOT INSTALLED`)
       }
 
-      if (!validation.valid && !options.sourceOnly) {
+      // Auto-install missing dependencies if --install flag is set
+      if (!validation.valid && options.install) {
+        console.log('\n📥 Installing missing dependencies...\n')
+
+        const installResult = installDependencies(validation.missing, config.projectRoot, {
+          verbose: options.verbose,
+        })
+
+        if (installResult.command) {
+          console.log(`  Running: ${installResult.command}\n`)
+        }
+
+        if (installResult.installed.length > 0) {
+          for (const pkg of installResult.installed) {
+            console.log(`  ✓ Installed ${pkg}`)
+          }
+          // Track installed packages for potential cleanup
+          installedPackages = installResult.installed
+        }
+
+        if (installResult.failed.length > 0) {
+          for (const pkg of installResult.failed) {
+            console.log(`  ✗ Failed to install ${pkg}`)
+          }
+        }
+
+        if (installResult.error && installResult.installed.length === 0) {
+          console.log(`\n❌ Installation failed: ${installResult.error}\n`)
+          process.exit(1)
+        }
+
+        // Re-validate after installation
+        validation = validateDependencies(config.modules, config.projectRoot)
+
+        if (!validation.valid && !options.sourceOnly) {
+          console.log('\n❌ Some dependencies are still missing after installation\n')
+          for (const mod of validation.missing) {
+            console.log(`  ✗ ${mod}`)
+          }
+          process.exit(1)
+        }
+      } else if (!validation.valid && !options.sourceOnly) {
         console.log('\n❌ Cannot generate bundle: missing dependencies\n')
         console.log(`  Run: npm install ${validation.missing.join(' ')}\n`)
+        console.log('  Or use --install to auto-install missing dependencies\n')
         console.log('  Or use --source-only to generate source files without bundling\n')
         process.exit(1)
       }
@@ -96,6 +142,32 @@ program
         console.log(`  Types: ${result.typesPath}`)
       }
       console.log(`  Duration: ${duration}s\n`)
+
+      // Cleanup installed dependencies if --cleanup flag is set
+      if (options.cleanup && installedPackages.length > 0) {
+        console.log('🧹 Cleaning up installed dependencies...\n')
+
+        const uninstallResult = uninstallDependencies(installedPackages, config.projectRoot, {
+          verbose: options.verbose,
+        })
+
+        if (uninstallResult.command) {
+          console.log(`  Running: ${uninstallResult.command}\n`)
+        }
+
+        if (uninstallResult.removed.length > 0) {
+          for (const pkg of uninstallResult.removed) {
+            console.log(`  ✓ Removed ${pkg}`)
+          }
+          console.log('')
+        }
+
+        if (!uninstallResult.success) {
+          console.log(`\n⚠️  Cleanup warning: ${uninstallResult.error}\n`)
+        }
+      } else if (options.cleanup && installedPackages.length === 0) {
+        console.log('ℹ️  No dependencies to clean up (nothing was installed by --install)\n')
+      }
     } catch (error) {
       console.error('\n❌ Error:', error instanceof Error ? error.message : error)
       process.exit(1)

@@ -6,6 +6,9 @@ import {
   validateDependencies,
   detectPackageManager,
   generateInstallCommand,
+  generateUninstallCommand,
+  installDependencies,
+  uninstallDependencies,
 } from '../../src/validators/dependencies';
 
 describe('Dependency Validator', () => {
@@ -210,6 +213,128 @@ describe('Dependency Validator', () => {
       const missing = ['./local-module', '/absolute/path'];
       const cmd = generateInstallCommand(missing, 'npm');
       expect(cmd).toBe('');
+    });
+  });
+
+  describe('installDependencies', () => {
+    it('should return error for local paths only', () => {
+      const result = installDependencies(['./local-module', '/absolute/path'], tempDir);
+
+      expect(result.success).toBe(false);
+      expect(result.command).toBe('');
+      expect(result.installed).toHaveLength(0);
+      expect(result.failed).toContain('./local-module');
+      expect(result.failed).toContain('/absolute/path');
+      expect(result.error).toContain('Cannot auto-install local paths');
+    });
+
+    it('should return success with no packages when array is empty', () => {
+      const result = installDependencies([], tempDir);
+
+      expect(result.success).toBe(true);
+      expect(result.command).toBe('');
+      expect(result.installed).toHaveLength(0);
+      expect(result.failed).toHaveLength(0);
+    });
+
+    it('should detect package manager and generate correct command', () => {
+      // Create pnpm lock file
+      fs.writeFileSync(path.join(tempDir, 'pnpm-lock.yaml'), '');
+
+      // This will fail because the package doesn't exist, but we can check the command
+      const result = installDependencies(['nonexistent-package-xyz'], tempDir);
+
+      expect(result.command).toBe('pnpm add nonexistent-package-xyz');
+      expect(result.success).toBe(false);
+    });
+
+    it('should separate npm packages from local paths', () => {
+      const result = installDependencies(
+        ['@tetherto/wdk', './local-module'],
+        tempDir
+      );
+
+      // The npm install will fail, but local paths should be in failed
+      expect(result.failed).toContain('./local-module');
+      expect(result.command).toBe('npm install @tetherto/wdk');
+    });
+
+    it('should report partial success with local path warning', () => {
+      // Create a fake package.json to make npm happy
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify({ name: 'test', version: '1.0.0' })
+      );
+
+      const result = installDependencies(['./missing-local'], tempDir);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Cannot auto-install local paths');
+    });
+  });
+
+  describe('generateUninstallCommand', () => {
+    it('should generate npm uninstall command', () => {
+      const packages = ['@tetherto/wdk', '@tetherto/wdk-wallet-evm-erc-4337'];
+      const cmd = generateUninstallCommand(packages, 'npm');
+      expect(cmd).toBe('npm uninstall @tetherto/wdk @tetherto/wdk-wallet-evm-erc-4337');
+    });
+
+    it('should generate yarn remove command', () => {
+      const packages = ['@tetherto/wdk'];
+      const cmd = generateUninstallCommand(packages, 'yarn');
+      expect(cmd).toBe('yarn remove @tetherto/wdk');
+    });
+
+    it('should generate pnpm remove command', () => {
+      const packages = ['@tetherto/wdk'];
+      const cmd = generateUninstallCommand(packages, 'pnpm');
+      expect(cmd).toBe('pnpm remove @tetherto/wdk');
+    });
+
+    it('should filter out local paths', () => {
+      const packages = ['@tetherto/wdk', './local-module', '/absolute/path'];
+      const cmd = generateUninstallCommand(packages, 'npm');
+      expect(cmd).toBe('npm uninstall @tetherto/wdk');
+    });
+
+    it('should return empty string if only local paths', () => {
+      const packages = ['./local-module', '/absolute/path'];
+      const cmd = generateUninstallCommand(packages, 'npm');
+      expect(cmd).toBe('');
+    });
+  });
+
+  describe('uninstallDependencies', () => {
+    it('should return success with empty array', () => {
+      const result = uninstallDependencies([], tempDir);
+
+      expect(result.success).toBe(true);
+      expect(result.command).toBe('');
+      expect(result.removed).toHaveLength(0);
+      expect(result.failed).toHaveLength(0);
+    });
+
+    it('should skip local paths', () => {
+      const result = uninstallDependencies(['./local-module'], tempDir);
+
+      expect(result.success).toBe(true);
+      expect(result.command).toBe('');
+      expect(result.removed).toHaveLength(0);
+    });
+
+    it('should detect package manager for uninstall', () => {
+      // Create pnpm lock file
+      fs.writeFileSync(path.join(tempDir, 'pnpm-lock.yaml'), '');
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify({ name: 'test', version: '1.0.0' })
+      );
+
+      // This will fail because the package doesn't exist, but we can check the command
+      const result = uninstallDependencies(['nonexistent-package-xyz'], tempDir);
+
+      expect(result.command).toBe('pnpm remove nonexistent-package-xyz');
     });
   });
 });
