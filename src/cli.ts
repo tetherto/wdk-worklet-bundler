@@ -31,6 +31,12 @@ function getPackageList(config: any): string[] {
     }
   }
 
+  if (config.protocols) {
+    for (const protocol of Object.values(config.protocols) as any[]) {
+      if (protocol.package) packages.add(protocol.package)
+    }
+  }
+
   if (config.preloadModules) {
     for (const mod of config.preloadModules) {
       packages.add(mod)

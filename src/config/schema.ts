@@ -22,6 +22,17 @@ export const configSchema = {
       minProperties: 1,
       description: 'Map of module keys to package name',
     },
+    protocols: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        required: ['package'],
+        properties: {
+          package: { type: 'string', description: 'WDK protocol module name' },
+        },
+      },
+      description: 'Map of protocol keys to package name',
+    },
     preloadModules: {
       type: 'array',
       items: { type: 'string' },

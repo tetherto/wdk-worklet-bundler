@@ -270,6 +270,7 @@ async function generateTypeDeclarations(config: ResolvedConfig): Promise<void> {
   fs.mkdirSync(generatedDir, { recursive: true })
 
   const networks = Object.keys(config.networks)
+  const protocols = config.protocols ? Object.keys(config.protocols) : []
 
   const declarations = `
 /**
@@ -280,6 +281,7 @@ async function generateTypeDeclarations(config: ResolvedConfig): Promise<void> {
 
 export * from "@tetherto/pear-wrk-wdk";
 export type NetworkName = ${networks.map((n) => `'${n}'`).join(' | ')};
+export type ProtocolName = ${protocols.length ? protocols.map((n) => `'${n}'`).join(' | ') : 'never'};
 
 export const bundle: string;
 `

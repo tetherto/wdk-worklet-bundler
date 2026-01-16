@@ -10,6 +10,14 @@ export interface WdkBundleConfig {
     }
   }
 
+  /** Protocol definitions: key -> package path */
+  protocols?: {
+    [protocolName: string]: {
+      package: string
+      [key: string]: any
+    }
+  }
+
   /** Modules to preload (native addons like spark-frost-bare-addon) */
   preloadModules?: string[]
 
