@@ -8,6 +8,7 @@ import { Command } from 'commander'
 import fs from 'fs'
 import path from 'path'
 import { DEFAULT_BUNDLE_BUILD_HOSTS, DEFAULT_BUNDLE_PATH, DEFAULT_TYPES_PATH } from './constants'
+import { printBanner } from './utils/banner'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require('../package.json')
@@ -473,6 +474,11 @@ ${preloadStr}  // Output paths (optional, defaults shown)
   }
 };
 `
+}
+
+if (process.argv.slice(2).length === 0) {
+  printBanner()
+  program.outputHelp()
 }
 
 program.parse()
