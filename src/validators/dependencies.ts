@@ -1,7 +1,3 @@
-/**
- * Dependency validator
- */
-
 import fs from 'fs';
 import path from 'path';
 
@@ -18,9 +14,6 @@ export interface ValidationResult {
   missing: string[];
 }
 
-/**
- * Resolve a module to its location
- */
 export function resolveModule(
   modulePath: string,
   projectRoot: string
@@ -77,9 +70,6 @@ export function resolveModule(
   };
 }
 
-/**
- * Validate all modules are installed
- */
 export function validateDependencies(
   modules: string[],
   projectRoot: string
@@ -104,9 +94,130 @@ export function validateDependencies(
   };
 }
 
-/**
- * Detect package manager
- */
+export interface MissingPeer {
+  name: string
+  sources: {
+    parent: string
+    range: string
+  }[]
+}
+
+export function checkOptionalPeerDependencies(
+  installedModules: ModuleInfo[],
+  projectRoot: string,
+  options: { verbose?: boolean } = {}
+): MissingPeer[] {
+  const missingPeers = new Map<string, MissingPeer>();
+  const visitedPaths = new Set<string>();
+  const queue: { path: string, name: string }[] = installedModules.map(m => ({ path: m.path, name: m.name }));
+  
+  const log = (msg: string) => {
+    if (options.verbose) console.log(msg);
+  };
+
+  // Packages/Scopes to ignore during recursion
+  const IGNORED_PREFIXES = [
+    'react', 
+    '@react-native', 
+    'expo', 
+    '@expo',
+    '@types', 
+    'typescript', 
+    'jest', 
+    'eslint', 
+    'prettier', 
+    'metro',
+    'babel',
+    'webpack',
+    'ts-node',
+    'bare',
+    'b4a',
+    'sodium-javascript'
+  ];
+
+  while (queue.length > 0) {
+    const { path: currentPath, name: currentName } = queue.shift()!;
+    
+    if (visitedPaths.has(currentPath)) continue;
+    visitedPaths.add(currentPath);
+
+    log(`[scan] Visiting: ${currentName}`);
+
+    const pkgPath = path.join(currentPath, 'package.json');
+    if (!fs.existsSync(pkgPath)) continue;
+
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      
+      const peerDeps = pkg.peerDependencies || {};
+      for (const [peerName, range] of Object.entries(peerDeps) as [string, string][]) {
+        if (IGNORED_PREFIXES.some(prefix => peerName.startsWith(prefix)) || peerName === 'react-native') {
+           log(`  [scan] Skipping ignored peer: ${peerName}`);
+           continue;
+        }
+
+        // Check if installed in project root (peer deps should be hoisted)
+        const peerInfo = resolveModule(peerName, projectRoot);
+        
+        if (!peerInfo) {
+          log(`  [scan] Missing peer: ${peerName} (required by ${currentName})`);
+          
+          if (!missingPeers.has(peerName)) {
+            missingPeers.set(peerName, {
+              name: peerName,
+              sources: []
+            });
+          }
+          
+          missingPeers.get(peerName)!.sources.push({
+            parent: currentName,
+            range: range
+          });
+          
+        } else {
+          // If installed, recurse into it
+          log(`  [scan] Found peer: ${peerName}`);
+          queue.push({ path: peerInfo.path, name: peerInfo.name });
+        }
+      }
+
+      const deps = pkg.dependencies || {};
+      for (const depName of Object.keys(deps)) {
+        if (IGNORED_PREFIXES.some(prefix => depName.startsWith(prefix)) || depName === 'react-native') {
+           log(`  [scan] Skipping ignored dep: ${depName}`);
+           continue;
+        }
+
+        let depInfo = resolveModule(depName, projectRoot);
+
+        if (!depInfo) {
+           const nestedPath = path.join(currentPath, 'node_modules', depName);
+           if (fs.existsSync(nestedPath)) {
+             depInfo = {
+               name: depName,
+               path: nestedPath,
+               version: 'unknown',
+               isLocal: false
+             };
+           }
+        }
+
+        if (depInfo) {
+          log(`  [scan] Recursing into dep: ${depName}`);
+          queue.push({ path: depInfo.path, name: depInfo.name });
+        } else {
+          log(`  [scan] Could not resolve dep: ${depName}`);
+        }
+      }
+
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  return Array.from(missingPeers.values());
+}
+
 export function detectPackageManager(
   projectRoot: string
 ): 'npm' | 'yarn' | 'pnpm' {
@@ -119,9 +230,6 @@ export function detectPackageManager(
   return 'npm';
 }
 
-/**
- * Generate install command for missing dependencies
- */
 export function generateInstallCommand(
   missing: string[],
   packageManager: 'npm' | 'yarn' | 'pnpm' = 'npm'
@@ -161,9 +269,6 @@ export interface UninstallResult {
   error?: string;
 }
 
-/**
- * Install missing dependencies
- */
 export function installDependencies(
   missing: string[],
   projectRoot: string,
@@ -221,9 +326,6 @@ export function installDependencies(
   }
 }
 
-/**
- * Generate uninstall command for packages
- */
 export function generateUninstallCommand(
   packages: string[],
   packageManager: 'npm' | 'yarn' | 'pnpm' = 'npm'
@@ -247,9 +349,6 @@ export function generateUninstallCommand(
   }
 }
 
-/**
- * Uninstall dependencies
- */
 export function uninstallDependencies(
   packages: string[],
   projectRoot: string,

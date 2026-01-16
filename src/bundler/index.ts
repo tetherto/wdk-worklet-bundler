@@ -24,6 +24,7 @@ export interface GenerateBundleResult {
   bundleSize: number
   duration: number
   error?: string
+  missingModule?: string
 }
 
 interface BarePackOptions {
@@ -57,10 +58,29 @@ function runBarePack(options: BarePackOptions): void {
     console.log(`  CWD: ${cwd}`)
   }
 
-  execSync(`npx ${args.join(' ')}`, {
-    cwd,
-    stdio: verbose ? 'inherit' : 'pipe',
-  })
+  try {
+    execSync(`npx ${args.join(' ')}`, {
+      cwd,
+      stdio: verbose ? 'inherit' : 'pipe',
+    })
+  } catch (error: any) {
+    // Try to extract stdout/stderr if available
+    const stderr = error.stderr ? error.stderr.toString() : ''
+    const stdout = error.stdout ? error.stdout.toString() : ''
+    const output = stderr + stdout
+    
+    // Check for missing module error
+    const match = output.match(/MODULE_NOT_FOUND: Cannot find module '(.+?)'/)
+    if (match && match[1]) {
+      const missingModule = match[1]
+      const err = new Error(`Missing module: ${missingModule}`)
+      ;(err as any).missingModule = missingModule
+      throw err
+    }
+    
+    // Re-throw original error if we couldn't parse it
+    throw error
+  }
 }
 
 /**
@@ -171,7 +191,20 @@ export async function generateBundle(
         cwd: config.projectRoot,
         verbose,
       })
-    } catch (barePackError) {
+    } catch (barePackError: any) {
+      // Check if we identified a missing module
+      if (barePackError.missingModule) {
+         return {
+          success: false,
+          bundlePath: config.resolvedOutput.bundle,
+          typesPath: config.resolvedOutput.types,
+          bundleSize: 0,
+          duration: Date.now() - startTime,
+          error: `Missing module: ${barePackError.missingModule}`,
+          missingModule: barePackError.missingModule
+        }
+      }
+
       // bare-pack failed - provide helpful error message
       const errorMsg = barePackError instanceof Error ? barePackError.message : String(barePackError)
 

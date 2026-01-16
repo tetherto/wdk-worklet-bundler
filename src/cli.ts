@@ -51,18 +51,39 @@ program
   .option('--source-only', 'Only generate source files (skip bare-pack)')
   .action(async (options) => {
     const { loadConfig } = await import('./config/loader')
-    const { validateDependencies, installDependencies, uninstallDependencies } = await import('./validators/dependencies')
+    const { 
+      validateDependencies, 
+      installDependencies, 
+      uninstallDependencies, 
+      checkOptionalPeerDependencies 
+    } = await import('./validators/dependencies')
     const { generateBundle, generateSourceFiles } = await import('./bundler')
 
     // Track packages installed by --install for potential cleanup
     let installedPackages: string[] = []
+
+    // Helper for prompts
+    const promptYesNo = async (question: string): Promise<boolean> => {
+      const readline = await import('readline')
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      })
+
+      return new Promise((resolve) => {
+        rl.question(`${question} [Y/n] `, (answer) => {
+          rl.close()
+          resolve(answer.toLowerCase() !== 'n')
+        })
+      })
+    }
 
     try {
       console.log('\n🔍 Reading configuration...\n')
       const config = await loadConfig(options.config)
       console.log(`  Config: ${config.configPath}`)
 
-      console.log('\n📦 Checking dependencies...\n')
+      console.log('\n📦 Checking core dependencies...\n')
       const requiredPackages = getPackageList(config)
       let validation = validateDependencies(requiredPackages, config.projectRoot)
 
@@ -70,58 +91,94 @@ program
         const version = mod.isLocal ? 'local' : `v${mod.version}`
         console.log(`  ✓ ${mod.name} (${version})`)
       }
-
       for (const mod of validation.missing) {
         console.log(`  ✗ ${mod} — NOT INSTALLED`)
       }
 
-      // Auto-install missing dependencies if --install flag is set
-      if (!validation.valid && options.install) {
-        console.log('\n📥 Installing missing dependencies...\n')
+      if (!validation.valid) {
+        let shouldInstall = options.install
+        
+        if (!shouldInstall && !options.sourceOnly) {
+          console.log('\n⚠️  Missing core dependencies.')
+          shouldInstall = await promptYesNo('Would you like to install them now?')
+        }
 
-        const installResult = installDependencies(validation.missing, config.projectRoot, {
-          verbose: options.verbose,
+        if (shouldInstall) {
+          console.log('\n📥 Installing missing dependencies...\n')
+          const result = installDependencies(validation.missing, config.projectRoot, {
+            verbose: options.verbose,
+          })
+
+          if (result.success) {
+            installedPackages.push(...result.installed)
+            validation = validateDependencies(requiredPackages, config.projectRoot)
+          } else {
+            console.log(`\n❌ Failed to install: ${result.error || 'Unknown error'}`)
+            process.exit(1)
+          }
+        } else if (!options.sourceOnly) {
+          console.log('\n❌ Cannot proceed without core dependencies.')
+          process.exit(1)
+        }
+      }
+
+      if (validation.valid && !options.sourceOnly) {
+        const missingPeers = checkOptionalPeerDependencies(validation.installed, config.projectRoot, {
+          verbose: options.verbose
         })
+        
+        if (missingPeers.length > 0) {
+          console.log('\n🧩 Checking peer dependencies...\n')
+          console.log('  The following optional peer dependencies were found in your dependency tree.')
+          console.log('  They are likely required for the worklet bundle to function correctly.\n')
 
-        if (installResult.command) {
-          console.log(`  Running: ${installResult.command}\n`)
-        }
+          const packagesToInstall: string[] = []
 
-        if (installResult.installed.length > 0) {
-          for (const pkg of installResult.installed) {
-            console.log(`  ✓ Installed ${pkg}`)
+          for (const peer of missingPeers) {
+            // Determine install version
+            const ranges = [...new Set(peer.sources.map(s => s.range))]
+            const isSingle = ranges.length === 1
+            
+            if (isSingle) {
+              // Single consistent requirement
+              console.log(`  ? ${peer.name}@${ranges[0]}`)
+              packagesToInstall.push(`${peer.name}@${ranges[0]}`)
+              
+              for (const source of peer.sources) {
+                console.log(`    └─ required by ${source.parent}`)
+              }
+            } else {
+              // Conflicting or mixed requirements
+              console.log(`  ? ${peer.name} (mixed requirements)`)
+              console.log(`    ⚠️  Falling back to latest`)
+              packagesToInstall.push(peer.name)
+              
+              for (const source of peer.sources) {
+                console.log(`    └─ required by ${source.parent} @ ${source.range}`)
+              }
+            }
           }
-          // Track installed packages for potential cleanup
-          installedPackages = installResult.installed
-        }
+          
+          let shouldInstallPeers = options.install
 
-        if (installResult.failed.length > 0) {
-          for (const pkg of installResult.failed) {
-            console.log(`  ✗ Failed to install ${pkg}`)
+          if (!shouldInstallPeers) {
+             console.log('\n⚠️  Missing optional peer dependencies.')
+             shouldInstallPeers = await promptYesNo('Would you like to install them now?')
+          }
+
+          if (shouldInstallPeers) {
+             console.log('\n📥 Installing peer dependencies...\n')
+             const result = installDependencies(packagesToInstall, config.projectRoot, {
+               verbose: options.verbose
+             })
+             
+             if (result.success) {
+               installedPackages.push(...result.installed)
+             } else {
+                console.log(`\n⚠️  Warning: Failed to install some peer dependencies: ${result.error}`)
+             }
           }
         }
-
-        if (installResult.error && installResult.installed.length === 0) {
-          console.log(`\n❌ Installation failed: ${installResult.error}\n`)
-          process.exit(1)
-        }
-
-        // Re-validate after installation
-        validation = validateDependencies(requiredPackages, config.projectRoot)
-
-        if (!validation.valid && !options.sourceOnly) {
-          console.log('\n❌ Some dependencies are still missing after installation\n')
-          for (const mod of validation.missing) {
-            console.log(`  ✗ ${mod}`)
-          }
-          process.exit(1)
-        }
-      } else if (!validation.valid && !options.sourceOnly) {
-        console.log('\n❌ Cannot generate bundle: missing dependencies\n')
-        console.log(`  Run: npm install ${validation.missing.join(' ')}\n`)
-        console.log('  Or use --install to auto-install missing dependencies\n')
-        console.log('  Or use --source-only to generate source files without bundling\n')
-        process.exit(1)
       }
 
       console.log('\n🌐 Networks configured:\n')
@@ -151,6 +208,14 @@ program
       })
 
       if (!result.success) {
+        if (result.missingModule) {
+           console.log(`\n❌ Build failed: Missing dependency '${result.missingModule}'\n`)
+           console.log(`💡 This appears to be a required dependency that was not detected automatically.`)
+           console.log(`   Please install it manually and try again:\n`)
+           console.log(`   npm install ${result.missingModule}\n`)
+           process.exit(1)
+        }
+
         console.log(`\n❌ Bundle generation failed:\n`)
         console.log(result.error)
         process.exit(1)
@@ -365,9 +430,6 @@ program
     }
   })
 
-/**
- * Generate config template
- */
 function generateConfigTemplate(
   networks: Record<string, any>,
   preloadModules: string[]
