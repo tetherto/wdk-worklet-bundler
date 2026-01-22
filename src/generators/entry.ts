@@ -14,19 +14,19 @@ export async function generateEntryPoint(config: ResolvedConfig, outputDir: stri
 // Generated at: ${new Date().toISOString()}
 // DO NOT EDIT MANUALLY
 
+// Handle unhandled promise rejections and exceptions
+if (typeof Bare !== 'undefined' && Bare.on) {
+  Bare.on('unhandledRejection', (error) => {
+    console.error('Unhandled promise rejection in worklet:', error);
+  })
+  Bare.on('uncaughtException', (error) => {
+    console.error('Uncaught exception in worklet:', error);
+  })
+}
+
 const { IPC: BareIPC } = BareKit
 const { HRPC, registerRpcHandlers, utils } = require('@tetherto/pear-wrk-wdk/worklet');
 const { logger } = utils;
-
-// Handle unhandled promise rejections and exceptions
-if (typeof process !== 'undefined' && process.on) {
-  process.on('unhandledRejection', (error) => {
-    logger.error('Unhandled promise rejection in worklet:', error);
-  })
-  process.on('uncaughtException', (error) => {
-    logger.error('Uncaught exception in worklet:', error);
-  })
-}
 
 // ============================================================
 // WALLET MODULES (Generated from config)
