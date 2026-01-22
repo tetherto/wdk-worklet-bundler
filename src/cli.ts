@@ -24,7 +24,6 @@ function getPackageList(config: any): string[] {
   // Add core (always required implicitly, unless overriden/preloaded logic changes)
   // For validation, we should probably check it.
   packages.add('@tetherto/wdk')
-  packages.add('@tetherto/pear-wrk-wdk')
   packages.add('bare-node-runtime')
 
   if (config.networks) {
