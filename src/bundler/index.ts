@@ -8,13 +8,14 @@ import path from 'path'
 import { execSync } from 'child_process'
 import type { ResolvedConfig } from '../config/types'
 import { generateEntryPoint } from '../generators/entry'
-import { DEFAULT_BUNDLE_BUILD_HOSTS, DEFAULT_BUNDLE_FILENAME, DEFAULT_OUTPUT_DIR } from '../constants'
+import { DEFAULT_BUNDLE_BUILD_HOSTS, DEFAULT_BUNDLE_FILENAME, DEFAULT_OUTPUT_DIR, DEFAULT_ENTRY_FILENAME } from '../constants'
 
 export interface GenerateBundleOptions {
   dryRun?: boolean
   verbose?: boolean
   silent?: boolean
   skipTypes?: boolean
+  skipGeneration?: boolean
 }
 
 export interface GenerateBundleResult {
@@ -164,17 +165,35 @@ export async function generateBundle(
     fs.mkdirSync(generatedDir, { recursive: true })
     fs.mkdirSync(path.dirname(config.resolvedOutput.bundle), { recursive: true })
 
-    // Step 1: Generate HRPC bindings
-    if (verbose) log('  Using HRPC bindings from @tetherto/pear-wrk-wdk')
+    // Step 1-3: Generate artifacts or use existing
+    let entryPath: string
+    let importsPath: string
 
-    // Step 2: Generate worklet entry point
-    if (verbose) log('  Generating worklet entry point...')
-    const entryPath = await generateEntryPoint(config, generatedDir)
-    if (verbose) log(`    Entry: ${entryPath}`)
+    if (options.skipGeneration) {
+      if (verbose) log('  Skipping artifact generation, using existing files...')
+      
+      entryPath = path.join(generatedDir, DEFAULT_ENTRY_FILENAME)
+      importsPath = path.join(generatedDir, 'pack.imports.json')
 
-    // Step 3: Generate imports file
-    if (verbose) log('  Generating imports file...')
-    const importsPath = generateImportsFile(generatedDir)
+      if (!fs.existsSync(entryPath)) {
+        throw new Error(`Artifacts not found at ${entryPath}. Run without --skip-generation first.`)
+      }
+      if (!fs.existsSync(importsPath)) {
+        throw new Error(`Artifacts not found at ${importsPath}. Run without --skip-generation first.`)
+      }
+    } else {
+      // Step 1: Generate HRPC bindings
+      if (verbose) log('  Using HRPC bindings from @tetherto/pear-wrk-wdk')
+
+      // Step 2: Generate worklet entry point
+      if (verbose) log('  Generating worklet entry point...')
+      entryPath = await generateEntryPoint(config, generatedDir)
+      if (verbose) log(`    Entry: ${entryPath}`)
+
+      // Step 3: Generate imports file
+      if (verbose) log('  Generating imports file...')
+      importsPath = generateImportsFile(generatedDir)
+    }
 
     // Step 4: Run bare-pack
     if (verbose) log('  Running bare-pack...')

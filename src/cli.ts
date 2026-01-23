@@ -57,6 +57,7 @@ program
   .option('-v, --verbose', 'Show verbose output')
   .option('--no-types', 'Skip TypeScript declaration generation')
   .option('--source-only', 'Only generate source files (skip bare-pack)')
+  .option('--skip-generation', 'Skip artifact generation and use existing files')
   .action(async (options) => {
     const { loadConfig } = await import('./config/loader')
     const { 
@@ -212,6 +213,7 @@ program
         dryRun: options.dryRun,
         verbose: options.verbose,
         skipTypes: !options.types,
+        skipGeneration: options.skipGeneration,
       })
 
       if (!result.success) {
