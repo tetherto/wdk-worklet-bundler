@@ -45,8 +45,7 @@ const rpc = new HRPC(BareIPC);
 let wdk = null;
 
 const context = {
-  get wdk() { return wdk; },
-  set wdk(value) { wdk = value; },
+  wdk,
   WDK,
   walletManagers,
   protocolManagers: typeof protocolManagers !== 'undefined' ? protocolManagers : {},
