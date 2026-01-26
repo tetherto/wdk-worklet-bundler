@@ -1,12 +1,22 @@
 # @tetherto/wdk-worklet-bundler
 
-CLI tool for generating WDK worklet bundles. This tool acts as a "Chef" that takes your specific "ingredients" (WDK Modules) and cooks them into a single, optimized bundle for your React Native application.
+CLI tool for generating optimized WDK worklet bundles. This tool packages specific blockchain modules (Wallets, Protocols) into a single artifact designed to run in a separate **Bare runtime** thread, isolated from your main React Native application loop.
+
+This architecture ensures:
+*   **Performance:** Heavy cryptographic operations do not block the UI thread.
+*   **Compatibility:** Provides a Node.js-like environment (via `bare-node-runtime`) for standard crypto libraries.
+*   **Isolation:** Securely encapsulates wallet logic and private keys.
 
 ## Installation
 
 ```bash
+# Global installation
 npm install -g @tetherto/wdk-worklet-bundler
-# or run directly
+
+# Or as a project dependency (recommended)
+npm install --save-dev @tetherto/wdk-worklet-bundler
+
+# Or run directly without installation
 npx @tetherto/wdk-worklet-bundler
 ```
 
@@ -46,11 +56,13 @@ npx @tetherto/wdk-worklet-bundler
 
 ## Architecture
 
-*   **Bundler (The Chef):** A build tool that doesn't hold logic itself. It orchestrates the creation of the worklet bundle.
-*   **Modules (The Ingredients):** Standalone packages (e.g., `@tetherto/wdk-wallet-btc`) that implement specific blockchain logic.
-*   **Core (`@tetherto/pear-wrk-wdk`):** The runtime library that powers the worklet's communication (HRPC).
+The bundler orchestrates the creation of a standalone JavaScript environment ("Worklet") that communicates with your main application.
 
-We recommend installing all WDK modules and the core library as **`devDependencies`** to keep your application bundle clean. The bundler compiles them into a separate artifact.
+*   **Host (React Native App):** Your UI layer. It loads the generated bundle and communicates with it via HRPC (Host-Remote Procedure Call).
+*   **Guest (Worklet Bundle):** A compact, optimized bundle containing your selected Wallet and Protocol modules. It runs inside the **Bare runtime** (a minimal Node.js-compatible runtime for mobile).
+*   **Bundler (The Chef):** This CLI tool. It resolves dependencies, generates the entry point code, and compiles everything using `bare-pack`.
+
+We recommend installing all WDK modules and the core library as **`devDependencies`** to keep your application bundle clean. The bundler compiles them into the separate worklet artifact.
 
 ## Commands
 
@@ -62,26 +74,54 @@ wdk-worklet-bundler generate [options]
 ```
 
 **Options:**
+*   `-c, --config <path>`: Path to config file.
 *   `--install`: Automatically install missing modules listed in your config (saves to `devDependencies`).
 *   `--keep-artifacts`: Keep the intermediate `.wdk/` folder (useful for debugging generated source code). By default, this is cleaned up.
 *   `--source-only`: Generate the entry files but skip the final `bare-pack` bundling step.
+*   `--skip-generation`: Skip artifact generation and use existing files.
 *   `--dry-run`: Print what would happen without writing files.
 *   `--no-types`: Skip generating TypeScript definitions (`index.d.ts`).
+*   `-v, --verbose`: Show verbose output.
 
 ### `init`
 Creates a fresh `wdk.config.js` file.
 
 ```bash
-wdk-worklet-bundler init
-
+wdk-worklet-bundler init [options]
 ```
+
+**Options:**
+*   `-y, --yes`: Use defaults without prompting.
 
 ### `validate`
 Checks if your configuration is valid and if all required dependencies are installed.
 
 ```bash
-wdk-worklet-bundler validate
+wdk-worklet-bundler validate [options]
 ```
+
+**Options:**
+*   `-c, --config <path>`: Path to config file.
+
+### `list-modules`
+List available WDK modules.
+
+```bash
+wdk-worklet-bundler list-modules [options]
+```
+
+**Options:**
+*   `--json`: Output as JSON.
+
+### `clean`
+Remove generated `.wdk` folder.
+
+```bash
+wdk-worklet-bundler clean [options]
+```
+
+**Options:**
+*   `-y, --yes`: Skip confirmation.
 
 ## Configuration Reference (`wdk.config.js`)
 
@@ -117,6 +157,8 @@ module.exports = {
 
   // Build options
   options: {
+    minify: false, // Optional: Minify the bundle
+    sourceMaps: false, // Optional: Generate source maps
     targets: ['ios-arm64', 'android-arm64'] // bare-pack targets
   }
 };
