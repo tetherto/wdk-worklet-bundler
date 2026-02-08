@@ -43,15 +43,23 @@ npx @tetherto/wdk-worklet-bundler
 
 3.  **Generate** the bundle:
     ```bash
-    # Automatically installs missing WDK modules to your devDependencies
+    # Automatically installs missing WDK modules to your dependencies
     wdk-worklet-bundler generate --install
     ```
 
 4.  **Use** it in your App:
     ```typescript
-    import { bundle, HRPC } from './.wdk'; // Default output location
-    
-    // Pass to your WdkAppProvider or worklet loader
+    import { WdkAppProvider } from '@tetherto/pear-wrk-wdk';
+    // Import the generated bundle asset (handled by metro/webpack as a static asset)
+    const workletBundle = require('./.wdk-bundle/wdk-worklet.bundle.js');
+
+    function App() {
+      return (
+        <WdkAppProvider bundle={{ bundle: workletBundle }}>
+          {/* Your App Content */}
+        </WdkAppProvider>
+      );
+    }
     ```
 
 ## Architecture
@@ -62,7 +70,7 @@ The bundler orchestrates the creation of a standalone JavaScript environment ("W
 *   **Guest (Worklet Bundle):** A compact, optimized bundle containing your selected Wallet and Protocol modules. It runs inside the **Bare runtime** (a minimal Node.js-compatible runtime for mobile).
 *   **Bundler (The Chef):** This CLI tool. It resolves dependencies, generates the entry point code, and compiles everything using `bare-pack`.
 
-We recommend installing all WDK modules and the core library as **`devDependencies`** to keep your application bundle clean. The bundler compiles them into the separate worklet artifact.
+We recommend installing all WDK modules and the core library as **`dependencies`**. The bundler compiles them into the separate worklet artifact, but having them in `dependencies` ensures proper resolution and type availability.
 
 ## Commands
 
