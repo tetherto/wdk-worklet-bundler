@@ -86,7 +86,8 @@ var require_package = __commonJS({
       scripts: {
         build: "tsup src/index.ts src/cli.ts --format cjs --dts --clean",
         dev: "tsup src/index.ts src/cli.ts --format cjs --dts --watch",
-        lint: "eslint src",
+        lint: "standard",
+        "lint:fix": "standard --fix",
         test: "jest",
         "test:coverage": "jest --coverage",
         prepare: "tsup src/index.ts src/cli.ts --format cjs --dts --clean",
@@ -99,6 +100,7 @@ var require_package = __commonJS({
         commander: "^12.1.0"
       },
       devDependencies: {
+        standard: "17.1.2",
         "@types/jest": "^29.5.14",
         "@types/node": "^22.10.2",
         jest: "^29.7.0",

@@ -24,7 +24,6 @@ describe('Dependency Validator', () => {
 
   describe('resolveModule', () => {
     it('should resolve installed npm module', () => {
-      // Create fake node_modules structure
       const modulePath = path.join(tempDir, 'node_modules', '@tetherto', 'wdk');
       fs.mkdirSync(modulePath, { recursive: true });
       fs.writeFileSync(
@@ -46,7 +45,6 @@ describe('Dependency Validator', () => {
     });
 
     it('should resolve local module path', () => {
-      // Create local module
       const localModule = path.join(tempDir, 'local-module');
       fs.mkdirSync(localModule, { recursive: true });
       fs.writeFileSync(
@@ -98,7 +96,6 @@ describe('Dependency Validator', () => {
 
   describe('validateDependencies', () => {
     it('should return valid when all modules are installed', () => {
-      // Setup installed modules
       const wdkPath = path.join(tempDir, 'node_modules', '@tetherto', 'wdk');
       const erc4337Path = path.join(tempDir, 'node_modules', '@tetherto', 'wdk-wallet-evm-erc-4337');
 
@@ -119,7 +116,7 @@ describe('Dependency Validator', () => {
         erc4337: '@tetherto/wdk-wallet-evm-erc-4337',
       };
 
-      const result = validateDependencies(modules, tempDir);
+      const result = validateDependencies(Object.values(modules), tempDir);
 
       expect(result.valid).toBe(true);
       expect(result.installed).toHaveLength(2);
@@ -132,7 +129,7 @@ describe('Dependency Validator', () => {
         erc4337: '@tetherto/wdk-wallet-evm-erc-4337',
       };
 
-      const result = validateDependencies(modules, tempDir);
+      const result = validateDependencies(Object.values(modules), tempDir);
 
       expect(result.valid).toBe(false);
       expect(result.installed).toHaveLength(0);
@@ -141,7 +138,6 @@ describe('Dependency Validator', () => {
     });
 
     it('should handle mixed installed and missing modules', () => {
-      // Only install one module
       const wdkPath = path.join(tempDir, 'node_modules', '@tetherto', 'wdk');
       fs.mkdirSync(wdkPath, { recursive: true });
       fs.writeFileSync(
@@ -154,7 +150,7 @@ describe('Dependency Validator', () => {
         erc4337: '@tetherto/wdk-wallet-evm-erc-4337',
       };
 
-      const result = validateDependencies(modules, tempDir);
+      const result = validateDependencies(Object.values(modules), tempDir);
 
       expect(result.valid).toBe(false);
       expect(result.installed).toHaveLength(1);
@@ -238,10 +234,8 @@ describe('Dependency Validator', () => {
     });
 
     it('should detect package manager and generate correct command', () => {
-      // Create pnpm lock file
       fs.writeFileSync(path.join(tempDir, 'pnpm-lock.yaml'), '');
 
-      // This will fail because the package doesn't exist, but we can check the command
       const result = installDependencies(['nonexistent-package-xyz'], tempDir);
 
       expect(result.command).toBe('pnpm add nonexistent-package-xyz');
@@ -254,13 +248,11 @@ describe('Dependency Validator', () => {
         tempDir
       );
 
-      // The npm install will fail, but local paths should be in failed
       expect(result.failed).toContain('./local-module');
       expect(result.command).toBe('npm install @tetherto/wdk');
     });
 
     it('should report partial success with local path warning', () => {
-      // Create a fake package.json to make npm happy
       fs.writeFileSync(
         path.join(tempDir, 'package.json'),
         JSON.stringify({ name: 'test', version: '1.0.0' })
@@ -324,14 +316,12 @@ describe('Dependency Validator', () => {
     });
 
     it('should detect package manager for uninstall', () => {
-      // Create pnpm lock file
       fs.writeFileSync(path.join(tempDir, 'pnpm-lock.yaml'), '');
       fs.writeFileSync(
         path.join(tempDir, 'package.json'),
         JSON.stringify({ name: 'test', version: '1.0.0' })
       );
 
-      // This will fail because the package doesn't exist, but we can check the command
       const result = uninstallDependencies(['nonexistent-package-xyz'], tempDir);
 
       expect(result.command).toBe('pnpm remove nonexistent-package-xyz');

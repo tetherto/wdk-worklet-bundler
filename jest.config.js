@@ -6,7 +6,7 @@ module.exports = {
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.test.ts',
-    '!src/cli.ts',
+    '!src/cli.ts'
   ],
-  coverageReporters: ['text', 'json', 'html'],
-};
+  coverageReporters: ['text', 'json', 'html']
+}

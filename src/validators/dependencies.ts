@@ -18,7 +18,6 @@ export function resolveModule(
   modulePath: string,
   projectRoot: string
 ): ModuleInfo | null {
-  // Check if it's a local path
   if (modulePath.startsWith('.') || modulePath.startsWith('/')) {
     const absolutePath = path.resolve(projectRoot, modulePath);
     if (fs.existsSync(absolutePath)) {
@@ -43,7 +42,6 @@ export function resolveModule(
     return null;
   }
 
-  // Check in node_modules
   const nodeModulesPath = path.join(projectRoot, 'node_modules', modulePath);
 
   if (!fs.existsSync(nodeModulesPath)) {
@@ -115,7 +113,6 @@ export function checkOptionalPeerDependencies(
     if (options.verbose) console.log(msg);
   };
 
-  // Packages/Scopes to ignore during recursion
   const IGNORED_PREFIXES = [
     'react', 
     '@react-native', 
@@ -211,7 +208,6 @@ export function checkOptionalPeerDependencies(
       }
 
     } catch {
-      // Ignore errors
     }
   }
 
@@ -234,7 +230,6 @@ export function generateInstallCommand(
   missing: string[],
   packageManager: 'npm' | 'yarn' | 'pnpm' = 'npm'
 ): string {
-  // Filter out local paths
   const packages = missing.filter(
     (m) => !m.startsWith('.') && !m.startsWith('/')
   );
@@ -276,7 +271,6 @@ export function installDependencies(
 ): InstallResult {
   const { execSync } = require('child_process');
 
-  // Filter out local paths - we can only install npm packages
   const packages = missing.filter(
     (m) => !m.startsWith('.') && !m.startsWith('/')
   );
@@ -356,7 +350,6 @@ export function uninstallDependencies(
 ): UninstallResult {
   const { execSync } = require('child_process');
 
-  // Filter out local paths - we can only uninstall npm packages
   const npmPackages = packages.filter(
     (m) => !m.startsWith('.') && !m.startsWith('/')
   );
