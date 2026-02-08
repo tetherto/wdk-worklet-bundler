@@ -9,6 +9,7 @@ import fs from 'fs'
 import path from 'path'
 import { DEFAULT_BUNDLE_BUILD_HOSTS, DEFAULT_BUNDLE_PATH, DEFAULT_TYPES_PATH, DEFAULT_OUTPUT_DIR } from './constants'
 import { printBanner } from './utils/banner'
+import { WdkBundleConfig } from './config/types'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require('../package.json')
@@ -17,8 +18,7 @@ const program = new Command()
 
 program.name('wdk-worklet-bundler').description('CLI tool for generating WDK worklet bundles').version(pkg.version)
 
-// Helper to extract unique package names from config
-function getPackageList (config: any): string[] {
+function getPackageList (config: WdkBundleConfig): string[] {
   const packages = new Set<string>()
 
   // Add core (always required implicitly, unless overriden/preloaded logic changes)
@@ -28,15 +28,13 @@ function getPackageList (config: any): string[] {
 
   if (config.networks) {
     for (const net of Object.values(config.networks)) {
-      // @ts-expect-error
       if (net.package) packages.add(net.package)
     }
   }
 
   if (config.protocols) {
     for (const protocol of Object.values(config.protocols)) {
-      // @ts-expect-error
-      if (protocol.package) packages.add(protocol.package)
+      if (protocol && protocol.package) packages.add(protocol.package)
     }
   }
 
