@@ -22,7 +22,7 @@
   "homepage": "https://github.com/tetherto/wdk-worklet-bundler#readme",
   "keywords": [
     "wdk",
-    "bare-runtime",
+    "bare",
     "bundle",
     "worklet",
     "hrpc",
@@ -37,9 +37,7 @@
     "lint:fix": "ts-standard --fix",
     "test": "jest",
     "test:coverage": "jest --coverage",
-    "prepare": "tsup src/index.ts src/cli.ts --format cjs --dts --clean",
-    "prepublishOnly": "tsup src/index.ts src/cli.ts --format cjs --dts --clean && jest",
-    "prepack": "tsup src/index.ts src/cli.ts --format cjs --dts --clean"
+    "prepare": "tsup src/index.ts src/cli.ts --format cjs --dts --clean"
   },
   "dependencies": {
     "ajv": "^8.17.1",
