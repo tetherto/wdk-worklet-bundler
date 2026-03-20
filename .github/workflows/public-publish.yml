@@ -23,6 +23,7 @@ jobs:
       - run: |
           VERSION=$(node -p "require('./package.json').version")
           npm version $VERSION --no-git-tag-version --allow-same-version
+          npm install --ignore-scripts # get the dev deps etc
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
           if ! git ls-remote --tags origin | grep -q "refs/tags/v$VERSION$"; then
             git tag "v$VERSION"
