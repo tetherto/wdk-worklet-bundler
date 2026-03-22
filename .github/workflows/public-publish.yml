@@ -25,10 +25,10 @@ jobs:
           node-version: lts/*
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install and prepare
+      - name: Install and build
         run: |
           npm install --ignore-scripts
-          npm run prepare --if-present
+          npm run build
 
       - name: Tag and publish
         run: |
