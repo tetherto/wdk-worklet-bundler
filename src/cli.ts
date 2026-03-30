@@ -58,6 +58,10 @@ program
   .option('--no-types', 'Skip TypeScript declaration generation')
   .option('--source-only', 'Only generate source files (skip bare-pack)')
   .option('--skip-generation', 'Skip artifact generation and use existing files')
+  .option('--transport <transport>', 'Transport type: hrpc (default) or jsonrpc')
+  .option('--link-addons', 'Link native addons via bare-link (default: true for jsonrpc)')
+  .option('--skip-link-addons', 'Skip bare-link addon linking (overrides jsonrpc default)')
+  .option('--platforms <platforms>', 'Comma-separated platforms for addons: ios,macos,android')
   .action(async (options) => {
     const { loadConfig } = await import('./config/loader')
     const {
@@ -88,8 +92,35 @@ program
 
     try {
       console.log('\n🔍 Reading configuration...\n')
-      const config = await loadConfig(options.config)
+      let config = await loadConfig(options.config)
       console.log(`  Config: ${config.configPath}`)
+
+      // Apply CLI transport override
+      if (options.transport) {
+        if (!['hrpc', 'jsonrpc'].includes(options.transport)) {
+          console.error(`\n❌ Invalid transport '${options.transport}'. Use 'hrpc' or 'jsonrpc'`)
+          process.exit(1)
+        }
+        config = { ...config, transport: options.transport as 'hrpc' | 'jsonrpc' }
+      }
+
+      // Apply CLI addon overrides
+      if (options.linkAddons || options.skipLinkAddons || options.platforms) {
+        const parsedPlatforms = options.platforms
+          ? (options.platforms as string).split(',')
+              .map((p: string) => p.trim())
+              .filter((p: string) => ['ios', 'macos', 'android'].includes(p)) as Array<'ios' | 'macos' | 'android'>
+          : undefined
+        config = {
+          ...config,
+          options: {
+            ...config.options,
+            ...(options.linkAddons ? { linkAddons: true } : {}),
+            ...(options.skipLinkAddons ? { linkAddons: false } : {}),
+            ...(parsedPlatforms ? { platforms: parsedPlatforms } : {})
+          }
+        }
+      }
 
       console.log('\n📦 Checking core dependencies...\n')
       const requiredPackages = getPackageList(config)
@@ -237,6 +268,13 @@ program
       console.log(`  Bundle: ${result.bundlePath} (${sizeKB} KB)`)
       if (options.types !== false) {
         console.log(`  Types: ${result.typesPath}`)
+      }
+      const shouldLinkAddons = config.options?.linkAddons ?? (config.transport === 'jsonrpc')
+      if (shouldLinkAddons) {
+        const platforms = config.options?.platforms ?? ['ios', 'macos', 'android']
+        for (const p of platforms) {
+          console.log(`  Addons (${p}): ${config.resolvedOutput.addons[p]}`)
+        }
       }
       console.log(`  Duration: ${duration}s\n`)
 

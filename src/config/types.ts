@@ -21,10 +21,19 @@ export interface WdkBundleConfig {
   /** Modules to preload (native addons like spark-frost-bare-addon) */
   preloadModules?: string[]
 
+  /** Transport mechanism for worklet communication */
+  transport?: 'hrpc' | 'jsonrpc'
+
   /** Output paths */
   output?: {
     bundle?: string
     types?: string
+    /** Output directories for bare-link native addons, per platform */
+    addons?: {
+      ios?: string
+      macos?: string
+      android?: string
+    }
   }
 
   /** Build options */
@@ -32,6 +41,10 @@ export interface WdkBundleConfig {
     minify?: boolean
     sourceMaps?: boolean
     targets?: string[]
+    /** Link native addons via bare-link. Defaults to true when transport is 'jsonrpc'. */
+    linkAddons?: boolean
+    /** Platforms to generate addons for. Defaults to all three when linkAddons is active. */
+    platforms?: Array<'ios' | 'macos' | 'android'>
   }
 }
 
@@ -44,5 +57,10 @@ export interface ResolvedConfig extends WdkBundleConfig {
   resolvedOutput: {
     bundle: string
     types: string
+    addons: {
+      ios: string
+      macos: string
+      android: string
+    }
   }
 }

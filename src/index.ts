@@ -13,9 +13,10 @@ export { validateDependencies, installDependencies, uninstallDependencies, detec
 export type { ModuleInfo, ValidationResult, InstallResult, UninstallResult } from './validators/dependencies'
 
 // Bundler
-export { generateBundle, generateSourceFiles } from './bundler'
-export type { GenerateBundleOptions, GenerateBundleResult } from './bundler'
+export { generateBundle, generateSourceFiles, linkAddons } from './bundler'
+export type { GenerateBundleOptions, GenerateBundleResult, LinkAddonsOptions, LinkAddonsResult } from './bundler'
 
 // Generators
 export { generateEntryPoint } from './generators/entry'
+export { generateJsonRpcEntryPoint } from './generators/entry-jsonrpc'
 export { generateWalletModulesCode } from './generators/wallet-modules'

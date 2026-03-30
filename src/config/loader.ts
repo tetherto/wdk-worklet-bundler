@@ -6,7 +6,7 @@ import fs from 'fs'
 import path from 'path'
 import type { WdkBundleConfig, ResolvedConfig } from './types'
 import { validateConfig } from './schema'
-import { DEFAULT_BUNDLE_PATH, DEFAULT_TYPES_PATH } from '../constants'
+import { DEFAULT_BUNDLE_PATH, DEFAULT_TYPES_PATH, DEFAULT_IOS_ADDONS_DIR, DEFAULT_MACOS_ADDONS_DIR, DEFAULT_ANDROID_ADDONS_DIR } from '../constants'
 
 const CONFIG_FILES = [
   'wdk.config.js',
@@ -91,7 +91,12 @@ export async function loadConfig (configPath?: string): Promise<ResolvedConfig> 
     types: path.resolve(
       projectRoot,
       config.output?.types || DEFAULT_TYPES_PATH
-    )
+    ),
+    addons: {
+      ios: path.resolve(projectRoot, config.output?.addons?.ios || DEFAULT_IOS_ADDONS_DIR),
+      macos: path.resolve(projectRoot, config.output?.addons?.macos || DEFAULT_MACOS_ADDONS_DIR),
+      android: path.resolve(projectRoot, config.output?.addons?.android || DEFAULT_ANDROID_ADDONS_DIR)
+    }
   }
 
   return {
