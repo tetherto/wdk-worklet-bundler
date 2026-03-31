@@ -34,6 +34,8 @@ export interface WdkBundleConfig {
       macos?: string
       android?: string
     }
+    /** Path for the generated addons.yml (BareKit Swift dependency list) */
+    addonsYml?: string
   }
 
   /** Build options */
@@ -45,6 +47,8 @@ export interface WdkBundleConfig {
     linkAddons?: boolean
     /** Platforms to generate addons for. Defaults to all three when linkAddons is active. */
     platforms?: Array<'ios' | 'macos' | 'android'>
+    /** Xcode target name used in the generated addons.yml. Defaults to 'app'. */
+    swiftTarget?: string
   }
 }
 
@@ -62,5 +66,6 @@ export interface ResolvedConfig extends WdkBundleConfig {
       macos: string
       android: string
     }
+    addonsYml: string
   }
 }

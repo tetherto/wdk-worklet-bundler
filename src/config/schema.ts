@@ -55,7 +55,8 @@ export const configSchema = {
             macos: { type: 'string', description: 'macOS addons output directory' },
             android: { type: 'string', description: 'Android addons output directory' }
           }
-        }
+        },
+        addonsYml: { type: 'string', description: 'Path for the generated addons.yml' }
       }
     },
     options: {
@@ -73,7 +74,8 @@ export const configSchema = {
           type: 'array',
           items: { type: 'string', enum: ['ios', 'macos', 'android'] },
           description: 'Platforms to generate addons for'
-        }
+        },
+        swiftTarget: { type: 'string', description: 'Xcode target name used in addons.yml' }
       }
     }
   }

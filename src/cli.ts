@@ -275,6 +275,9 @@ program
         for (const p of platforms) {
           console.log(`  Addons (${p}): ${config.resolvedOutput.addons[p]}`)
         }
+        if (platforms.includes('ios')) {
+          console.log(`  addons.yml: ${config.resolvedOutput.addonsYml}`)
+        }
       }
       console.log(`  Duration: ${duration}s\n`)
 

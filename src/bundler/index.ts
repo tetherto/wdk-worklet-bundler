@@ -10,6 +10,7 @@ import type { ResolvedConfig } from '../config/types'
 import { generateEntryPoint } from '../generators/entry'
 import { generateJsonRpcEntryPoint } from '../generators/entry-jsonrpc'
 import { linkAddons } from './addons'
+import { convertBundleEsmToCjs } from './convert-esm-to-cjs'
 import { DEFAULT_BUNDLE_BUILD_HOSTS, DEFAULT_BUNDLE_FILENAME, DEFAULT_OUTPUT_DIR, DEFAULT_ENTRY_FILENAME } from '../constants'
 
 export type { LinkAddonsOptions, LinkAddonsResult } from './addons'
@@ -251,6 +252,12 @@ export async function generateBundle (
           `  Entry: ${entryPath}\n` +
           'You can run bare-pack manually once dependencies are resolved.'
       }
+    }
+
+    // Step 4b: Convert ESM to CJS in bundle (jsonrpc only — JSC requires CJS)
+    if (isJsonRpc) {
+      if (verbose) log('  Converting ESM to CJS in bundle...')
+      convertBundleEsmToCjs(config.resolvedOutput.bundle, { minify: true, verbose })
     }
 
     // Get bundle stats

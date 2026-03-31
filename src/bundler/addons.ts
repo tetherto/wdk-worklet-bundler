@@ -6,7 +6,8 @@
 import fs from 'fs'
 import path from 'path'
 import type { ResolvedConfig } from '../config/types'
-import { BARE_LINK_MODULES, BARE_LINK_HOSTS } from '../constants'
+import { BARE_LINK_MODULES, BARE_LINK_HOSTS, DEFAULT_SWIFT_TARGET } from '../constants'
+import { generateAddonsYml } from '../generators/addons-yml'
 
 export interface LinkAddonsOptions {
   platforms?: Array<'ios' | 'macos' | 'android'>
@@ -62,6 +63,13 @@ export async function linkAddons (
       }
 
       log(`  ✓ ${platform} addons → ${outputPath}`)
+
+      // Generate addons.yml after iOS linking
+      if (platform === 'ios') {
+        const swiftTarget = config.options?.swiftTarget ?? DEFAULT_SWIFT_TARGET
+        generateAddonsYml(outputPath, swiftTarget, config.resolvedOutput.addonsYml)
+        log(`  ✓ addons.yml → ${config.resolvedOutput.addonsYml}`)
+      }
     }
 
     return { success: true, duration: Date.now() - startTime, platforms }

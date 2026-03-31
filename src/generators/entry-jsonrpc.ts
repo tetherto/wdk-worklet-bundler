@@ -15,41 +15,40 @@ export async function generateJsonRpcEntryPoint (config: ResolvedConfig, outputD
 // Transport: jsonrpc
 // DO NOT EDIT MANUALLY
 
+// Polyfills for JSC (TextEncoder, process, etc.) - must be first
 require('bare-node-runtime/global')
 
-// .mjs patch: JSC on iOS/darwin has no js_create_module, force .mjs to load as CJS
+// Force .mjs files to load as CJS (JSC has no js_create_module)
 if (Bare.platform === 'ios' || Bare.platform === 'darwin') {
   module.constructor._extensions['.mjs'] = module.constructor._extensions['.js']
 }
 
-const { globalAgent } = require('bare-http1')
+const {
+  registerJsonRpcHandlers,
+  utils: { logger }
+} = require('@tetherto/pear-wrk-wdk/jsonrpc')
 
-if (typeof Bare !== 'undefined' && Bare.on) {
-  Bare.on('unhandledRejection', (error) => {
-    console.error('Unhandled promise rejection in worklet:', error)
+// Catch termination signal from BareKit (when Swift calls worklet.terminate())
+// Without this, Bare's default handler calls C abort(), killing the host app.
+Bare.on('uncaughtException', (err) => {
+  logger.error('Caught exception in worklet:', err)
+})
+
+Bare.on('exit', () => {
+  if (context.wdk) {
+    try { context.wdk.dispose() } catch (e) {}
+    context.wdk = null
+  }
+})
+
+if (typeof process !== 'undefined' && process.on) {
+  process.on('unhandledRejection', (error) => {
+    logger.error('Unhandled promise rejection in worklet:', error)
   })
-  Bare.on('uncaughtException', (error) => {
-    console.error('Uncaught exception in worklet:', error)
-  })
-  Bare.on('suspend', () => {
-    globalAgent.suspend()
-    console.log('Fetching in worklet suspended', globalAgent.suspended)
-  })
-  Bare.on('resume', () => {
-    globalAgent.resume()
-    console.log('Fetching in worklet resumed', globalAgent.resumed)
-  })
-  Bare.on('exit', () => {
-    if (context.wdk) {
-      try { context.wdk.dispose() } catch (e) {}
-      context.wdk = null
-    }
+  process.on('uncaughtException', (error) => {
+    logger.error('Uncaught exception in worklet:', error)
   })
 }
-
-const { IPC: BareIPC } = BareKit
-const { registerJsonRpcHandlers, utils } = require('@tetherto/pear-wrk-wdk/jsonrpc', { with: { imports: 'bare-node-runtime/imports' } })
-const { logger } = utils
 
 // ============================================================
 // WALLET MODULES (Generated from config)
@@ -61,19 +60,27 @@ ${walletModulesCode}
 // ============================================================
 ${protocolModulesCode}
 
+// === Context (passed to all handlers) ===
+
 let wdk = null
 
 const context = {
   WDK,
   walletManagers,
   protocolManagers: typeof protocolManagers !== 'undefined' ? protocolManagers : {},
-  wdkLoadError: null,
+  wdkLoadError,
   get wdk () { return wdk },
   set wdk (value) { wdk = value }
 }
 
+// === Initialize BareKit IPC and register handlers ===
+
+// eslint-disable-next-line no-undef
+const { IPC: BareIPC } = BareKit
+logger.info('BareKit IPC initialized')
+
 registerJsonRpcHandlers(BareIPC, context)
-logger.info('Worklet started (jsonrpc)')
+logger.info('WDK Worklet ready - listening for JSON-RPC messages')
 `.trim()
 
   await fs.promises.mkdir(outputDir, { recursive: true })
