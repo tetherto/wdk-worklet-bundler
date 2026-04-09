@@ -15,7 +15,10 @@ export async function generateEntryPoint (config: ResolvedConfig, outputDir: str
 // DO NOT EDIT MANUALLY
 
 require('bare-node-runtime/global');
-const { globalAgent } = require('bare-http1')
+const { globalAgent: http1Agent } = require('bare-http1')
+const { globalAgent: httpsAgent } = require('bare-https')
+
+const agents = [http1Agent, httpsAgent]
 
 // Handle unhandled promise rejections and exceptions
 if (typeof Bare !== 'undefined' && Bare.on) {
@@ -26,12 +29,16 @@ if (typeof Bare !== 'undefined' && Bare.on) {
     console.error('Uncaught exception in worklet:', error);
   })
   Bare.on('suspend', () => {
-    globalAgent.suspend()
-    console.log('Fetching in worklet suspended', globalAgent.suspended)
+    agents.forEach((globalAgent) => {
+      globalAgent.suspend()
+      console.log('Fetching in worklet suspended', globalAgent.suspended)
+    })
   })
   Bare.on('resume', () => {
-    globalAgent.resume()
-    console.log('Fetching in worklet resumed', globalAgent.resumed)
+    agents.forEach((globalAgent) => {
+      globalAgent.resume()
+      console.log('Fetching in worklet resumed', globalAgent.resumed)
+    })
   })
 }
 
