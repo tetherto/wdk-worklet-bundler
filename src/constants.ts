@@ -23,14 +23,27 @@ export const DEFAULT_ANDROID_ADDONS_DIR = './android-addons'
 // Only modules that are actually installed will be linked (others are skipped).
 export const BARE_LINK_MODULES = [
   'bare-abort', 'bare-buffer', 'bare-channel', 'bare-crypto', 'bare-dns',
-  'bare-fs', 'bare-hrtime', 'bare-inspect', 'bare-inspector', 'bare-logger',
+  'bare-fs', 'bare-hrtime', 'bare-inspect', 'bare-logger',
   'bare-module', 'bare-module-lexer', 'bare-os', 'bare-performance',
   'bare-pipe', 'bare-realm', 'bare-repl', 'bare-signals', 'bare-stdio',
   'bare-structured-clone', 'bare-subprocess', 'bare-system-logger',
   'bare-tcp', 'bare-thread', 'bare-timers', 'bare-tls', 'bare-tty',
-  'bare-type', 'bare-url', 'bare-v8', 'bare-zlib',
+  'bare-type', 'bare-url', 'bare-zlib',
   'sodium-native'
 ]
+
+// V8-specific addons -- only linked for platforms using V8 (Android, desktop)
+const V8_ONLY_MODULES = ['bare-v8', 'bare-inspector']
+
+// Platforms that use V8 as the JS engine (not JSC)
+const V8_PLATFORMS = new Set(['android'])
+
+export function getModulesForPlatform (platform: string): string[] {
+  if (V8_PLATFORMS.has(platform)) {
+    return [...BARE_LINK_MODULES, ...V8_ONLY_MODULES]
+  }
+  return BARE_LINK_MODULES
+}
 
 // Host triples for each platform
 export const BARE_LINK_HOSTS: Record<string, string[]> = {

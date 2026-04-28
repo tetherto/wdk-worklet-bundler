@@ -6,7 +6,7 @@
 import fs from 'fs'
 import path from 'path'
 import type { ResolvedConfig } from '../config/types'
-import { BARE_LINK_MODULES, BARE_LINK_HOSTS, DEFAULT_SWIFT_TARGET } from '../constants'
+import { getModulesForPlatform, BARE_LINK_HOSTS, DEFAULT_SWIFT_TARGET } from '../constants'
 import { generateAddonsYml } from '../generators/addons-yml'
 
 export interface LinkAddonsOptions {
@@ -47,7 +47,8 @@ export async function linkAddons (
       log(`  Linking addons for ${platform} → ${outputPath}`)
       fs.mkdirSync(outputPath, { recursive: true })
 
-      for (const moduleName of BARE_LINK_MODULES) {
+      const modules = getModulesForPlatform(platform)
+      for (const moduleName of modules) {
         const modulePath = path.join(config.projectRoot, 'node_modules', moduleName)
 
         if (!fs.existsSync(modulePath)) {
