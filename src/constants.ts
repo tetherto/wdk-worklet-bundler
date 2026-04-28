@@ -19,11 +19,16 @@ export const DEFAULT_IOS_ADDONS_DIR = './ios-addons'
 export const DEFAULT_MACOS_ADDONS_DIR = './mac-addons'
 export const DEFAULT_ANDROID_ADDONS_DIR = './android-addons'
 
-// Native modules to link via bare-link
+// Native modules to link via bare-link.
+// Only modules that are actually installed will be linked (others are skipped).
 export const BARE_LINK_MODULES = [
-  'bare-abort', 'bare-crypto', 'bare-dns', 'bare-fs', 'bare-hrtime',
-  'bare-inspect', 'bare-os', 'bare-performance', 'bare-pipe', 'bare-signals',
-  'bare-tcp', 'bare-tls', 'bare-tty', 'bare-type', 'bare-url', 'bare-zlib',
+  'bare-abort', 'bare-buffer', 'bare-channel', 'bare-crypto', 'bare-dns',
+  'bare-fs', 'bare-hrtime', 'bare-inspect', 'bare-inspector', 'bare-logger',
+  'bare-module', 'bare-module-lexer', 'bare-os', 'bare-performance',
+  'bare-pipe', 'bare-realm', 'bare-repl', 'bare-signals', 'bare-stdio',
+  'bare-structured-clone', 'bare-subprocess', 'bare-system-logger',
+  'bare-tcp', 'bare-thread', 'bare-timers', 'bare-tls', 'bare-tty',
+  'bare-type', 'bare-url', 'bare-v8', 'bare-zlib',
   'sodium-native'
 ]
 
