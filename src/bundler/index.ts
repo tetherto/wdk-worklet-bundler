@@ -254,8 +254,9 @@ export async function generateBundle (
       }
     }
 
-    // Step 4b: Convert ESM to CJS in bundle (jsonrpc only — JSC requires CJS)
-    if (isJsonRpc) {
+    // Step 4b: Convert ESM to CJS in bundle (needed for JSC runtimes like iOS/macOS)
+    const shouldConvertCjs = config.options?.convertEsmToCjs ?? isJsonRpc
+    if (shouldConvertCjs) {
       if (verbose) log('  Converting ESM to CJS in bundle...')
       convertBundleEsmToCjs(config.resolvedOutput.bundle, { minify: true, verbose })
     }

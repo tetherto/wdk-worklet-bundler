@@ -49,6 +49,10 @@ export interface WdkBundleConfig {
     platforms?: Array<'ios' | 'macos' | 'android'>
     /** Xcode target name used in the generated addons.yml. Defaults to 'app'. */
     swiftTarget?: string
+    /** Convert ESM to CJS in the bundle. Required for JSC runtimes (iOS/macOS).
+     *  Android uses V8 which supports ESM natively, so set to false for Android-only builds.
+     *  Defaults to true when transport is 'jsonrpc'. */
+    convertEsmToCjs?: boolean
   }
 }
 

@@ -75,7 +75,8 @@ export const configSchema = {
           items: { type: 'string', enum: ['ios', 'macos', 'android'] },
           description: 'Platforms to generate addons for'
         },
-        swiftTarget: { type: 'string', description: 'Xcode target name used in addons.yml' }
+        swiftTarget: { type: 'string', description: 'Xcode target name used in addons.yml' },
+        convertEsmToCjs: { type: 'boolean', description: 'Convert ESM to CJS in bundle (for JSC runtimes). Defaults to true for jsonrpc transport.' }
       }
     }
   }
