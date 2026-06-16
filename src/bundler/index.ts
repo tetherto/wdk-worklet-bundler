@@ -66,8 +66,8 @@ function runBarePack (options: BarePackOptions): void {
     })
   } catch (error: any) {
     // Try to extract stdout/stderr if available
-    const stderr = error.stderr ? error.stderr.toString() : ''
-    const stdout = error.stdout ? error.stdout.toString() : ''
+    const stderr: string = error.stderr ? error.stderr.toString() : ''
+    const stdout: string = error.stdout ? error.stdout.toString() : ''
     const output = stderr + stdout
 
     // Check for missing module error
