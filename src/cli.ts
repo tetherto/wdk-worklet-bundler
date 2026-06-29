@@ -21,6 +21,11 @@ interface GenerateOptions {
   types?: boolean
   sourceOnly?: boolean
   skipGeneration?: boolean
+  transport?: string
+  linkAddons?: boolean
+  skipLinkAddons?: boolean
+  platforms?: string
+  esmToCjs?: boolean
 }
 
 interface InitOptions {
@@ -133,7 +138,7 @@ program
       // Apply CLI addon and build overrides
       if (options.linkAddons || options.skipLinkAddons || options.platforms || options.esmToCjs === false) {
         const parsedPlatforms = options.platforms
-          ? (options.platforms as string).split(',')
+          ? options.platforms.split(',')
               .map((p: string) => p.trim())
               .filter((p: string) => ['ios', 'macos', 'android'].includes(p)) as Array<'ios' | 'macos' | 'android'>
           : undefined

@@ -81,25 +81,26 @@ export function convertBundleEsmToCjs (bundlePath: string, options: ConvertOptio
         })
         newContent = Buffer.from(result.code)
         converted++
-      } catch (e: any) {
+      } catch (e) {
         if (verbose) {
-          console.error(`  FAIL ${filePath}: ${(e.message ?? '').split('\n')[0]}`)
+          const msg = e instanceof Error ? e.message : String(e)
+          console.error(`  FAIL ${filePath}: ${msg.split('\n')[0]}`)
         }
         failed++
       }
     } else if (filePath.endsWith('/package.json')) {
       try {
-        const pkg = JSON.parse(originalContent.toString())
+        const pkg = JSON.parse(originalContent.toString()) as { type?: string }
         if (pkg.type === 'module') {
           delete pkg.type
           newContent = Buffer.from(JSON.stringify(pkg))
           pkgPatched++
         }
-      } catch (e) { /* skip malformed json */ }
+      } catch { /* skip malformed json */ }
     } else if (filePath.endsWith('.json') && minify) {
       try {
         newContent = Buffer.from(JSON.stringify(JSON.parse(originalContent.toString())))
-      } catch (e) { /* skip */ }
+      } catch { /* skip */ }
     }
 
     newBuffers.push(newContent)

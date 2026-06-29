@@ -37,8 +37,8 @@ export async function linkAddons (
   const platforms = options.platforms ?? config.options?.platforms ?? ['ios', 'macos', 'android']
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const link = require('bare-link') as (modulePath: string, opts: { hosts: string[], out: string }) => AsyncIterable<any>
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const link = require('bare-link') as (modulePath: string, opts: { hosts: string[], out: string }) => AsyncIterable<unknown>
 
     for (const platform of platforms) {
       const outputPath = config.resolvedOutput.addons[platform]
@@ -59,8 +59,7 @@ export async function linkAddons (
         if (verbose) log(`    Linking ${moduleName}...`)
 
         // bare-link is an async generator — iterate to completion
-        // eslint-disable-next-line no-unused-vars
-        for await (const _ of link(modulePath, { hosts, out: outputPath })) {}
+        for await (const step of link(modulePath, { hosts, out: outputPath })) { void step }
       }
 
       log(`  ✓ ${platform} addons → ${outputPath}`)
