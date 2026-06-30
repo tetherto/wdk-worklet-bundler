@@ -38,6 +38,12 @@ function getPackageList (config: WdkBundleConfig): string[] {
     }
   }
 
+  if (config.modules != null) {
+    for (const mod of Object.values(config.modules)) {
+      if (mod && mod.package) packages.add(mod.package)
+    }
+  }
+
   if (config.preloadModules != null) {
     for (const mod of config.preloadModules) {
       packages.add(mod)

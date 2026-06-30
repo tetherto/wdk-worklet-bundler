@@ -18,6 +18,22 @@ export interface WdkBundleConfig {
     }
   }
 
+  /**
+   * Generic module definitions: key -> package + optional factory/events. The
+   * package exports createModule({ seed, config, capabilities, emit }) -> instance;
+   * a module needing storage builds it from config (e.g. config.storagePath).
+   */
+  modules?: {
+    [moduleName: string]: {
+      /** Module package name (the factory exporting createModule(ctx)) */
+      package: string
+      /** Named factory export to call (default: the package's default export) */
+      factory?: string
+      /** Events forwarded host-ward as moduleEvent (e.g. ['update']) */
+      events?: string[]
+    }
+  }
+
   /** Modules to preload (native addons like spark-frost-bare-addon) */
   preloadModules?: string[]
 
