@@ -283,7 +283,7 @@ program
               fs.rmSync(entryPath, { recursive: true, force: true })
               if (options.verbose) console.log(`  ✓ Removed ${entryPath}\n`)
             } catch (e) {
-              console.log(`  ⚠️  Failed to cleanup ${entryPath}: ${e}\n`)
+              console.log(`  ⚠️  Failed to cleanup ${entryPath}: ${String(e)}\n`)
             }
           }
         }

@@ -8,7 +8,7 @@ import path from 'path'
 import { execFileSync } from 'child_process'
 import type { ResolvedConfig } from '../config/types'
 import { generateEntryPoint } from '../generators/entry'
-import { DEFAULT_BUNDLE_BUILD_HOSTS, DEFAULT_BUNDLE_FILENAME, DEFAULT_OUTPUT_DIR, DEFAULT_ENTRY_FILENAME } from '../constants'
+import { DEFAULT_BUNDLE_BUILD_HOSTS, DEFAULT_OUTPUT_DIR, DEFAULT_ENTRY_FILENAME } from '../constants'
 
 export interface GenerateBundleOptions {
   dryRun?: boolean
