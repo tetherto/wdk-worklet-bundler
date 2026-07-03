@@ -68,5 +68,35 @@ describe('Config Schema Validation', () => {
       }
       expect(() => validateConfig(config)).toThrow('must have required property \'package\'')
     })
+
+    it('should validate a config with a modules section', () => {
+      const config = {
+        networks: { eth: { package: 'pkg' } },
+        modules: {
+          addressBook: {
+            package: '@tetherto/wdk-p2p-address-book',
+            factory: 'createModule',
+            events: ['update']
+          }
+        }
+      }
+      expect(() => validateConfig(config)).not.toThrow()
+    })
+
+    it('should validate a minimal module (package only)', () => {
+      const config = {
+        networks: { eth: { package: 'pkg' } },
+        modules: { addressBook: { package: '@tetherto/wdk-p2p-address-book' } }
+      }
+      expect(() => validateConfig(config)).not.toThrow()
+    })
+
+    it('should fail if a module package is missing', () => {
+      const config = {
+        networks: { eth: { package: 'pkg' } },
+        modules: { addressBook: { events: ['update'] } }
+      }
+      expect(() => validateConfig(config)).toThrow('must have required property \'package\'')
+    })
   })
 })

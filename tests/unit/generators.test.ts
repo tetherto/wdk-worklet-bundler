@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { generateWalletModulesCode } from '../../src/generators/wallet-modules'
+import { generateModuleModulesCode } from '../../src/generators/module-modules'
 import { generateEntryPoint } from '../../src/generators/entry'
 import type { ResolvedConfig } from '../../src/config/types'
 
@@ -86,6 +87,84 @@ describe('Code Generators', () => {
     })
   })
 
+  describe('generateModuleModulesCode', () => {
+    const withModules = (): ResolvedConfig => createMockConfig({
+      modules: {
+        addressBook: {
+          package: '@tetherto/wdk-p2p-address-book',
+          events: ['update']
+        }
+      }
+    })
+
+    it('returns a placeholder when no modules configured', () => {
+      const code = generateModuleModulesCode(createMockConfig())
+      expect(code).toContain('No modules configured')
+    })
+
+    it('requires the module package and builds the manager', () => {
+      const code = generateModuleModulesCode(withModules())
+      expect(code).toContain("const WdkP2pAddressBookRaw = require('@tetherto/wdk-p2p-address-book', { with: { imports: 'bare-node-runtime/imports' }})")
+      expect(code).toContain("moduleManagers['addressBook'] = {")
+    })
+
+    it('defaults the factory to the package default export', () => {
+      const code = generateModuleModulesCode(withModules())
+      expect(code).toContain('createModule: (ctx) => WdkP2pAddressBook(ctx)')
+    })
+
+    it('bakes the declared events', () => {
+      const code = generateModuleModulesCode(withModules())
+      expect(code).toContain('events: ["update"]')
+    })
+
+    it('supports a named factory export', () => {
+      const code = generateModuleModulesCode(createMockConfig({
+        modules: { foo: { package: 'foo-pkg', factory: 'createModule' } }
+      }))
+      expect(code).toContain('createModule: (ctx) => FooPkg.createModule(ctx)')
+    })
+
+    it('stays free of any storage/corestore specifics', () => {
+      const code = generateModuleModulesCode(withModules())
+      expect(code).not.toContain("require('corestore'")
+      expect(code).not.toContain('createStore')
+      expect(code).not.toContain('state:')
+    })
+
+    // Squash the "emitted string is valid, executable JS producing the right
+    // runtime shape" caveat: actually evaluate the generated code with a stubbed
+    // require and assert the resulting WdkModuleManager behaves correctly.
+    it('emits valid JS that executes to a correct WdkModuleManager', () => {
+      const code = generateModuleModulesCode(withModules())
+
+      const factory = jest.fn((ctx: unknown) => ({ instance: true, ctx }))
+      const requireStub = (id: string): unknown => {
+        if (id === '@tetherto/wdk-p2p-address-book') return factory
+        throw new Error('unexpected require: ' + id)
+      }
+
+      interface GeneratedManager {
+        events: string[]
+        createModule: (ctx: unknown) => unknown
+      }
+      type Build = (require: (id: string) => unknown) => Record<string, GeneratedManager>
+
+      // Intentionally execute the generated code to prove it is valid, runnable JS.
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+      const build = new Function('require', `${code}\nreturn moduleManagers;`) as unknown as Build
+      const moduleManagers = build(requireStub)
+      const mgr = moduleManagers.addressBook
+
+      expect(mgr.events).toEqual(['update'])
+      expect(typeof mgr.createModule).toBe('function')
+
+      const ctx = { seed: 'SEED', config: { namespace: 'tether-wallet' }, capabilities: {}, emit: (): void => {} }
+      mgr.createModule(ctx)
+      expect(factory).toHaveBeenCalledWith(ctx)
+    })
+  })
+
   describe('generateEntryPoint', () => {
     let tempDir: string
 
@@ -139,6 +218,32 @@ describe('Code Generators', () => {
 
       expect(content).toContain("require('@tetherto/wdk'")
       expect(content).toContain("require('@tetherto/wdk-wallet-evm-erc-4337'")
+    })
+
+    it('should wire modules into context when configured', async () => {
+      const config = createMockConfig({
+        modules: {
+          addressBook: {
+            package: '@tetherto/wdk-p2p-address-book',
+            events: ['update']
+          }
+        }
+      })
+      const entryPath = await generateEntryPoint(config, tempDir)
+      const content = fs.readFileSync(entryPath, 'utf-8')
+
+      expect(content).toContain("moduleManagers['addressBook'] = {")
+      expect(content).toContain("require('@tetherto/wdk-p2p-address-book'")
+      expect(content).toContain("moduleManagers: typeof moduleManagers !== 'undefined' ? moduleManagers : {}")
+    })
+
+    it('should default modules to an empty map when none configured', async () => {
+      const config = createMockConfig()
+      const entryPath = await generateEntryPoint(config, tempDir)
+      const content = fs.readFileSync(entryPath, 'utf-8')
+
+      expect(content).toContain('// No modules configured')
+      expect(content).toContain("moduleManagers: typeof moduleManagers !== 'undefined' ? moduleManagers : {}")
     })
 
     it('should create output directory if it does not exist', async () => {

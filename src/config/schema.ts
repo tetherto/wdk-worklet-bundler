@@ -33,6 +33,19 @@ export const configSchema = {
       },
       description: 'Map of protocol keys to package name'
     },
+    modules: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        required: ['package'],
+        properties: {
+          package: { type: 'string', description: 'Module package exporting a createModule(ctx) factory' },
+          factory: { type: 'string', description: "Named factory export to call (default: the package's default export)" },
+          events: { type: 'array', items: { type: 'string' }, description: 'Events forwarded host-ward as moduleEvent' }
+        }
+      },
+      description: 'Map of module keys to a generic module package + optional factory/events'
+    },
     preloadModules: {
       type: 'array',
       items: { type: 'string' },
