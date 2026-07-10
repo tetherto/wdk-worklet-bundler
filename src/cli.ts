@@ -104,15 +104,24 @@ program
     const {
       validateDependencies,
       installDependencies,
-      checkOptionalPeerDependencies
+      checkOptionalPeerDependencies,
+      detectPackageManager,
+      generateInstallCommand
     } = await import('./validators/dependencies')
     const { generateBundle, generateSourceFiles } = await import('./bundler')
 
     // Track packages installed by --install for potential cleanup
     const installedPackages: string[] = []
 
-    // Helper for prompts
-    const promptYesNo = async (question: string): Promise<boolean> => {
+    // Helper for prompts. Without a TTY (npm postinstall, CI) readline's
+    // callback never fires and node exits 0 silently, so answer with the
+    // provided default instead of prompting.
+    const promptYesNo = async (question: string, nonInteractiveDefault = false): Promise<boolean> => {
+      if (!process.stdin.isTTY) {
+        console.log(`${question} [Y/n] — non-interactive environment detected, assuming '${nonInteractiveDefault ? 'yes' : 'no'}'`)
+        return nonInteractiveDefault
+      }
+
       const readline = await import('readline')
       const rl = readline.createInterface({
         input: process.stdin,
@@ -120,9 +129,16 @@ program
       })
 
       return await new Promise((resolve) => {
+        let answered = false
         rl.question(`${question} [Y/n] `, (answer) => {
+          answered = true
           rl.close()
           resolve(answer.toLowerCase() !== 'n')
+        })
+        // stdin can still end mid-prompt (piped input); don't hang or
+        // silently drain the event loop.
+        rl.on('close', () => {
+          if (!answered) resolve(nonInteractiveDefault)
         })
       })
     }
@@ -195,6 +211,7 @@ program
           }
         } else if (!options.sourceOnly) {
           console.log('\n❌ Cannot proceed without core dependencies.')
+          console.log('   Install them manually or re-run with --install.\n')
           process.exit(1)
         }
       }
@@ -206,7 +223,7 @@ program
 
         if (missingPeers.length > 0) {
           console.log('\n🧩 Checking peer dependencies...\n')
-          console.log('  The following optional peer dependencies were found in your dependency tree.')
+          console.log('  The following peer dependencies are missing from your dependency tree.')
           console.log('  They are likely required for the worklet bundle to function correctly.\n')
 
           const packagesToInstall: string[] = []
@@ -239,7 +256,7 @@ program
           let shouldInstallPeers = options.install
 
           if (!shouldInstallPeers) {
-            console.log('\n⚠️  Missing optional peer dependencies.')
+            console.log('\n⚠️  Missing peer dependencies.')
             shouldInstallPeers = await promptYesNo('Would you like to install them now?')
           }
 
@@ -254,6 +271,10 @@ program
             } else {
               console.log(`\n⚠️  Warning: Failed to install some peer dependencies: ${result.error}`)
             }
+          } else {
+            const installCmd = generateInstallCommand(packagesToInstall, detectPackageManager(config.projectRoot))
+            console.log('\n⚠️  Skipping peer dependency installation. If the bundle fails, install them manually:\n')
+            console.log(`   ${installCmd}\n`)
           }
         }
       }

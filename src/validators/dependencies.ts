@@ -7,6 +7,7 @@ interface PackageJson {
   version: string
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>
 }
 
 export interface ModuleInfo {
@@ -165,6 +166,14 @@ export function checkOptionalPeerDependencies (
         const peerInfo = resolveModule(peerName, projectRoot)
 
         if (peerInfo == null) {
+          // Peers explicitly marked optional via peerDependenciesMeta are
+          // only needed for opt-in features (e.g. Ledger hardware signing
+          // in @bitcoinerlab/descriptors) — never report them as missing.
+          if (pkg.peerDependenciesMeta?.[peerName]?.optional === true) {
+            log(`  [scan] Skipping optional peer (peerDependenciesMeta): ${peerName}`)
+            continue
+          }
+
           log(`  [scan] Missing peer: ${peerName} (required by ${currentName})`)
 
           if (!missingPeers.has(peerName)) {

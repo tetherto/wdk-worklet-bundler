@@ -8,7 +8,8 @@ import {
   generateInstallCommand,
   generateUninstallCommand,
   installDependencies,
-  uninstallDependencies
+  uninstallDependencies,
+  checkOptionalPeerDependencies
 } from '../../src/validators/dependencies'
 
 describe('Dependency Validator', () => {
@@ -155,6 +156,94 @@ describe('Dependency Validator', () => {
       expect(result.valid).toBe(false)
       expect(result.installed).toHaveLength(1)
       expect(result.missing).toContain('@tetherto/wdk-wallet-evm-erc-4337')
+    })
+  })
+
+  describe('checkOptionalPeerDependencies', () => {
+    const writeModule = (name: string, pkg: Record<string, unknown>): string => {
+      const modulePath = path.join(tempDir, 'node_modules', ...name.split('/'))
+      fs.mkdirSync(modulePath, { recursive: true })
+      fs.writeFileSync(
+        path.join(modulePath, 'package.json'),
+        JSON.stringify({ name, version: '1.0.0', ...pkg })
+      )
+      return modulePath
+    }
+
+    it('should report missing peers not marked as optional', () => {
+      const modulePath = writeModule('@tetherto/wdk-wallet-btc', {
+        peerDependencies: { 'some-required-peer': '^1.0.0' }
+      })
+
+      const missing = checkOptionalPeerDependencies(
+        [{ name: '@tetherto/wdk-wallet-btc', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(missing).toHaveLength(1)
+      expect(missing[0].name).toBe('some-required-peer')
+      expect(missing[0].sources[0].parent).toBe('@tetherto/wdk-wallet-btc')
+    })
+
+    it('should skip peers marked optional via peerDependenciesMeta', () => {
+      const modulePath = writeModule('@bitcoinerlab/descriptors', {
+        peerDependencies: { '@ledgerhq/ledger-bitcoin': '^0.3.1' },
+        peerDependenciesMeta: { '@ledgerhq/ledger-bitcoin': { optional: true } }
+      })
+
+      const missing = checkOptionalPeerDependencies(
+        [{ name: '@bitcoinerlab/descriptors', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(missing).toHaveLength(0)
+    })
+
+    it('should find optional peers declared by transitive dependencies', () => {
+      const btcPath = writeModule('@tetherto/wdk-wallet-btc', {
+        dependencies: { '@bitcoinerlab/descriptors': '^2.0.0' }
+      })
+      writeModule('@bitcoinerlab/descriptors', {
+        peerDependencies: {
+          '@ledgerhq/ledger-bitcoin': '^0.3.1',
+          'some-required-peer': '^1.0.0'
+        },
+        peerDependenciesMeta: { '@ledgerhq/ledger-bitcoin': { optional: true } }
+      })
+
+      const missing = checkOptionalPeerDependencies(
+        [{ name: '@tetherto/wdk-wallet-btc', path: btcPath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(missing.map(m => m.name)).toEqual(['some-required-peer'])
+    })
+
+    it('should not report installed peers', () => {
+      const modulePath = writeModule('@tetherto/wdk-wallet-btc', {
+        peerDependencies: { 'some-required-peer': '^1.0.0' }
+      })
+      writeModule('some-required-peer', {})
+
+      const missing = checkOptionalPeerDependencies(
+        [{ name: '@tetherto/wdk-wallet-btc', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(missing).toHaveLength(0)
+    })
+
+    it('should skip ignored peer prefixes', () => {
+      const modulePath = writeModule('@tetherto/wdk-wallet-btc', {
+        peerDependencies: { 'react-native': '*', react: '*' }
+      })
+
+      const missing = checkOptionalPeerDependencies(
+        [{ name: '@tetherto/wdk-wallet-btc', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(missing).toHaveLength(0)
     })
   })
 
