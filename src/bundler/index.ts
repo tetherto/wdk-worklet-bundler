@@ -24,6 +24,8 @@ export interface GenerateBundleOptions {
   silent?: boolean
   skipTypes?: boolean
   skipGeneration?: boolean
+  /** Defer missing optional peer deps to runtime instead of failing (default: true) */
+  deferOptionalPeers?: boolean
 }
 
 export interface GenerateBundleResult {
@@ -240,10 +242,15 @@ export async function generateBundle (
     // Missing peers marked optional via peerDependenciesMeta (e.g.
     // @ledgerhq/ledger-bitcoin for @bitcoinerlab/descriptors) are deferred so
     // bare-pack doesn't fail statically resolving imports the app never uses.
-    const { installed } = validateDependencies(getPackageList(config), config.projectRoot)
-    const deferredPeers = findMissingOptionalPeers(installed, config.projectRoot, { verbose })
-    if (deferredPeers.length > 0) {
-      log(`  Deferring missing optional peer dependencies: ${deferredPeers.join(', ')}`)
+    // --no-defer-optional-peers disables this for apps that use those
+    // features and want to find out at build time instead of runtime.
+    let deferredPeers: string[] = []
+    if (options.deferOptionalPeers !== false) {
+      const { installed } = validateDependencies(getPackageList(config), config.projectRoot)
+      deferredPeers = findMissingOptionalPeers(installed, config.projectRoot, { verbose })
+      if (deferredPeers.length > 0) {
+        log(`  Deferring missing optional peer dependencies: ${deferredPeers.join(', ')}`)
+      }
     }
 
     try {

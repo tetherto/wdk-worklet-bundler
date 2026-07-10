@@ -26,6 +26,7 @@ interface GenerateOptions {
   skipLinkAddons?: boolean
   platforms?: string
   esmToCjs?: boolean
+  deferOptionalPeers?: boolean
 }
 
 interface InitOptions {
@@ -64,6 +65,7 @@ program
   .option('--skip-link-addons', 'Skip bare-link addon linking (overrides jsonrpc default)')
   .option('--platforms <platforms>', 'Comma-separated platforms for addons: ios,macos,android')
   .option('--no-esm-to-cjs', 'Skip ESM to CJS conversion (for V8 runtimes like Android)')
+  .option('--no-defer-optional-peers', 'Fail on missing optional peer deps (e.g. Ledger support) instead of deferring them to runtime')
   .action(async (options: GenerateOptions) => {
     const { loadConfig } = await import('./config/loader')
     const {
@@ -268,7 +270,8 @@ program
         dryRun: options.dryRun,
         verbose: options.verbose,
         skipTypes: !options.types,
-        skipGeneration: options.skipGeneration
+        skipGeneration: options.skipGeneration,
+        deferOptionalPeers: options.deferOptionalPeers
       })
 
       if (!result.success) {
