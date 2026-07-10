@@ -9,7 +9,8 @@ import {
   generateUninstallCommand,
   installDependencies,
   uninstallDependencies,
-  checkOptionalPeerDependencies
+  checkOptionalPeerDependencies,
+  findMissingOptionalPeers
 } from '../../src/validators/dependencies'
 
 describe('Dependency Validator', () => {
@@ -231,6 +232,53 @@ describe('Dependency Validator', () => {
       )
 
       expect(missing).toHaveLength(0)
+    })
+
+    it('should list missing optional peers for deferral via findMissingOptionalPeers', () => {
+      const modulePath = writeModule('@bitcoinerlab/descriptors', {
+        peerDependencies: { '@ledgerhq/ledger-bitcoin': '^0.3.1' },
+        peerDependenciesMeta: { '@ledgerhq/ledger-bitcoin': { optional: true } }
+      })
+
+      const deferred = findMissingOptionalPeers(
+        [{ name: '@bitcoinerlab/descriptors', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(deferred).toEqual(['@ledgerhq/ledger-bitcoin'])
+    })
+
+    it('should find optional peers declared only in peerDependenciesMeta', () => {
+      // follow-redirects style: no peerDependencies entry at all
+      const modulePath = writeModule('follow-redirects', {
+        peerDependenciesMeta: { debug: { optional: true } }
+      })
+
+      const deferred = findMissingOptionalPeers(
+        [{ name: 'follow-redirects', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(deferred).toEqual(['debug'])
+      expect(checkOptionalPeerDependencies(
+        [{ name: 'follow-redirects', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )).toHaveLength(0)
+    })
+
+    it('should not list installed optional peers for deferral', () => {
+      const modulePath = writeModule('@bitcoinerlab/descriptors', {
+        peerDependencies: { '@ledgerhq/ledger-bitcoin': '^0.3.1' },
+        peerDependenciesMeta: { '@ledgerhq/ledger-bitcoin': { optional: true } }
+      })
+      writeModule('@ledgerhq/ledger-bitcoin', {})
+
+      const deferred = findMissingOptionalPeers(
+        [{ name: '@bitcoinerlab/descriptors', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(deferred).toEqual([])
     })
 
     it('should skip ignored peer prefixes', () => {

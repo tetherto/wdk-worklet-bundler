@@ -109,12 +109,36 @@ export interface MissingPeer {
   }>
 }
 
+export interface PeerScanResult {
+  /** Missing peers that are NOT marked optional — likely needed at runtime */
+  missing: MissingPeer[]
+  /** Missing peers marked optional via peerDependenciesMeta — safe to defer */
+  missingOptional: string[]
+}
+
 export function checkOptionalPeerDependencies (
   installedModules: ModuleInfo[],
   projectRoot: string,
   options: { verbose?: boolean } = {}
 ): MissingPeer[] {
+  return scanPeerDependencies(installedModules, projectRoot, options).missing
+}
+
+export function findMissingOptionalPeers (
+  installedModules: ModuleInfo[],
+  projectRoot: string,
+  options: { verbose?: boolean } = {}
+): string[] {
+  return scanPeerDependencies(installedModules, projectRoot, options).missingOptional
+}
+
+export function scanPeerDependencies (
+  installedModules: ModuleInfo[],
+  projectRoot: string,
+  options: { verbose?: boolean } = {}
+): PeerScanResult {
   const missingPeers = new Map<string, MissingPeer>()
+  const missingOptional = new Set<string>()
   const visitedPaths = new Set<string>()
   const queue: Array<{ path: string, name: string }> = installedModules.map(m => ({ path: m.path, name: m.name }))
 
@@ -156,7 +180,16 @@ export function checkOptionalPeerDependencies (
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as PackageJson
 
       const peerDeps: Record<string, string> = pkg.peerDependencies ?? {}
-      for (const [peerName, range] of Object.entries(peerDeps)) {
+      const peerMeta = pkg.peerDependenciesMeta ?? {}
+
+      // Some packages (e.g. follow-redirects) declare an optional peer only
+      // in peerDependenciesMeta, without a peerDependencies entry — scan the
+      // union of both fields.
+      const peerNames = new Set([...Object.keys(peerDeps), ...Object.keys(peerMeta)])
+
+      for (const peerName of peerNames) {
+        const range = peerDeps[peerName] ?? '*'
+
         if (IGNORED_PREFIXES.some(prefix => peerName.startsWith(prefix)) || peerName === 'react-native') {
           log(`  [scan] Skipping ignored peer: ${peerName}`)
           continue
@@ -168,9 +201,11 @@ export function checkOptionalPeerDependencies (
         if (peerInfo == null) {
           // Peers explicitly marked optional via peerDependenciesMeta are
           // only needed for opt-in features (e.g. Ledger hardware signing
-          // in @bitcoinerlab/descriptors) — never report them as missing.
-          if (pkg.peerDependenciesMeta?.[peerName]?.optional === true) {
-            log(`  [scan] Skipping optional peer (peerDependenciesMeta): ${peerName}`)
+          // in @bitcoinerlab/descriptors) — never report them as missing,
+          // but track them so bare-pack can defer their resolution.
+          if (peerMeta[peerName]?.optional === true) {
+            log(`  [scan] Optional peer not installed, will defer: ${peerName}`)
+            missingOptional.add(peerName)
             continue
           }
 
@@ -226,7 +261,10 @@ export function checkOptionalPeerDependencies (
     }
   }
 
-  return Array.from(missingPeers.values())
+  return {
+    missing: Array.from(missingPeers.values()),
+    missingOptional: Array.from(missingOptional)
+  }
 }
 
 export function detectPackageManager (

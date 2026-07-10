@@ -9,7 +9,7 @@ import fs from 'fs'
 import path from 'path'
 import { DEFAULT_BUNDLE_BUILD_HOSTS, DEFAULT_BUNDLE_PATH, DEFAULT_TYPES_PATH, DEFAULT_OUTPUT_DIR } from './constants'
 import { printBanner } from './utils/banner'
-import type { WdkBundleConfig } from './config/types'
+import { getPackageList } from './config/packages'
 import pkg from '../package.json'
 
 interface GenerateOptions {
@@ -47,41 +47,6 @@ interface CleanOptions {
 const program = new Command()
 
 program.name('wdk-worklet-bundler').description('CLI tool for generating WDK worklet bundles').version(pkg.version)
-
-function getPackageList (config: WdkBundleConfig): string[] {
-  const packages = new Set<string>()
-
-  // Add core (always required implicitly, unless overriden/preloaded logic changes)
-  // For validation, we should probably check it.
-  packages.add('@tetherto/wdk')
-  packages.add('bare-node-runtime')
-
-  if (config.networks) {
-    for (const net of Object.values(config.networks)) {
-      if (net.package) packages.add(net.package)
-    }
-  }
-
-  if (config.protocols != null) {
-    for (const protocol of Object.values(config.protocols)) {
-      if (protocol?.package) packages.add(protocol.package)
-    }
-  }
-
-  if (config.modules != null) {
-    for (const mod of Object.values(config.modules)) {
-      if (mod && mod.package) packages.add(mod.package)
-    }
-  }
-
-  if (config.preloadModules != null) {
-    for (const mod of config.preloadModules) {
-      packages.add(mod)
-    }
-  }
-
-  return Array.from(packages)
-}
 
 program
   .command('generate')
