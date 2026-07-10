@@ -102,8 +102,6 @@ program
           rl.close()
           resolve(answer.toLowerCase() !== 'n')
         })
-        // stdin can still end mid-prompt (piped input); don't hang or
-        // silently drain the event loop.
         rl.on('close', () => {
           if (!answered) resolve(nonInteractiveDefault)
         })

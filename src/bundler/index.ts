@@ -24,7 +24,6 @@ export interface GenerateBundleOptions {
   silent?: boolean
   skipTypes?: boolean
   skipGeneration?: boolean
-  /** Defer missing optional peer deps to runtime instead of failing (default: true) */
   deferOptionalPeers?: boolean
 }
 
@@ -45,7 +44,6 @@ interface BarePackOptions {
   targets: string[]
   cwd: string
   verbose?: boolean
-  /** Module specifiers whose resolution is deferred to runtime (missing optional peers) */
   defer?: string[]
 }
 

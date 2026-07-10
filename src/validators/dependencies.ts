@@ -110,9 +110,7 @@ export interface MissingPeer {
 }
 
 export interface PeerScanResult {
-  /** Missing peers that are NOT marked optional — likely needed at runtime */
   missing: MissingPeer[]
-  /** Missing peers marked optional via peerDependenciesMeta — safe to defer */
   missingOptional: string[]
 }
 
