@@ -114,13 +114,19 @@ export interface PeerScanResult {
   missingOptional: string[]
 }
 
-export function checkOptionalPeerDependencies (
+export function findMissingRequiredPeers (
   installedModules: ModuleInfo[],
   projectRoot: string,
   options: { verbose?: boolean } = {}
 ): MissingPeer[] {
   return scanPeerDependencies(installedModules, projectRoot, options).missing
 }
+
+/**
+ * @deprecated Use findMissingRequiredPeers — since optional-marked peers are
+ * filtered out, this returns only the required missing peers.
+ */
+export const checkOptionalPeerDependencies = findMissingRequiredPeers
 
 export function findMissingOptionalPeers (
   installedModules: ModuleInfo[],
@@ -186,7 +192,18 @@ export function scanPeerDependencies (
       const peerNames = new Set([...Object.keys(peerDeps), ...Object.keys(peerMeta)])
 
       for (const peerName of peerNames) {
-        const range = peerDeps[peerName] ?? '*'
+        const declaredRange = peerDeps[peerName]
+        const isOptional = peerMeta[peerName]?.optional === true
+
+        // A peerDependenciesMeta entry alone declares nothing — only honor
+        // meta-only names (e.g. follow-redirects → debug) when they are
+        // explicitly marked optional.
+        if (declaredRange == null && !isOptional) {
+          log(`  [scan] Skipping meta-only non-optional peer: ${peerName}`)
+          continue
+        }
+
+        const range = declaredRange ?? '*'
 
         if (IGNORED_PREFIXES.some(prefix => peerName.startsWith(prefix)) || peerName === 'react-native') {
           log(`  [scan] Skipping ignored peer: ${peerName}`)
@@ -201,7 +218,7 @@ export function scanPeerDependencies (
           // only needed for opt-in features (e.g. Ledger hardware signing
           // in @bitcoinerlab/descriptors) — never report them as missing,
           // but track them so bare-pack can defer their resolution.
-          if (peerMeta[peerName]?.optional === true) {
+          if (isOptional) {
             log(`  [scan] Optional peer not installed, will defer: ${peerName}`)
             missingOptional.add(peerName)
             continue
@@ -261,7 +278,7 @@ export function scanPeerDependencies (
 
   return {
     missing: Array.from(missingPeers.values()),
-    missingOptional: Array.from(missingOptional)
+    missingOptional: Array.from(missingOptional).filter(name => !missingPeers.has(name))
   }
 }
 

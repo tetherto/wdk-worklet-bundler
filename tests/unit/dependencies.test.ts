@@ -10,7 +10,9 @@ import {
   installDependencies,
   uninstallDependencies,
   checkOptionalPeerDependencies,
-  findMissingOptionalPeers
+  findMissingRequiredPeers,
+  findMissingOptionalPeers,
+  scanPeerDependencies
 } from '../../src/validators/dependencies'
 
 describe('Dependency Validator', () => {
@@ -279,6 +281,63 @@ describe('Dependency Validator', () => {
       )
 
       expect(deferred).toEqual([])
+    })
+
+    it('should never defer a peer required elsewhere (required scanned first)', () => {
+      const requirerPath = writeModule('pkg-requirer', {
+        peerDependencies: { 'shared-peer': '^4.0.0' }
+      })
+      const optionalPath = writeModule('pkg-optional', {
+        peerDependencies: { 'shared-peer': '*' },
+        peerDependenciesMeta: { 'shared-peer': { optional: true } }
+      })
+      const requirer = { name: 'pkg-requirer', path: requirerPath, version: '1.0.0', isLocal: false }
+      const optional = { name: 'pkg-optional', path: optionalPath, version: '1.0.0', isLocal: false }
+
+      const result = scanPeerDependencies([requirer, optional], tempDir)
+
+      expect(result.missingOptional).toEqual([])
+      expect(result.missing).toHaveLength(1)
+      expect(result.missing[0].name).toBe('shared-peer')
+      // Only the actual requirer is listed as a source — no '*' range pollution
+      expect(result.missing[0].sources).toEqual([{ parent: 'pkg-requirer', range: '^4.0.0' }])
+    })
+
+    it('should never defer a peer required elsewhere (optional scanned first)', () => {
+      const requirerPath = writeModule('pkg-requirer', {
+        peerDependencies: { 'shared-peer': '^4.0.0' }
+      })
+      const optionalPath = writeModule('pkg-optional', {
+        peerDependencies: { 'shared-peer': '*' },
+        peerDependenciesMeta: { 'shared-peer': { optional: true } }
+      })
+      const requirer = { name: 'pkg-requirer', path: requirerPath, version: '1.0.0', isLocal: false }
+      const optional = { name: 'pkg-optional', path: optionalPath, version: '1.0.0', isLocal: false }
+
+      const result = scanPeerDependencies([optional, requirer], tempDir)
+
+      expect(result.missingOptional).toEqual([])
+      expect(result.missing).toHaveLength(1)
+      expect(result.missing[0].name).toBe('shared-peer')
+      expect(result.missing[0].sources).toEqual([{ parent: 'pkg-requirer', range: '^4.0.0' }])
+    })
+
+    it('should ignore meta-only peers not marked optional', () => {
+      const modulePath = writeModule('weird-pkg', {
+        peerDependenciesMeta: { 'not-really-a-peer': {} }
+      })
+
+      const result = scanPeerDependencies(
+        [{ name: 'weird-pkg', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(result.missing).toHaveLength(0)
+      expect(result.missingOptional).toHaveLength(0)
+    })
+
+    it('should keep checkOptionalPeerDependencies as alias of findMissingRequiredPeers', () => {
+      expect(checkOptionalPeerDependencies).toBe(findMissingRequiredPeers)
     })
 
     it('should skip ignored peer prefixes', () => {

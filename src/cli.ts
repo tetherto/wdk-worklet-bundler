@@ -71,7 +71,7 @@ program
     const {
       validateDependencies,
       installDependencies,
-      checkOptionalPeerDependencies,
+      findMissingRequiredPeers,
       detectPackageManager,
       generateInstallCommand
     } = await import('./validators/dependencies')
@@ -182,18 +182,18 @@ program
       }
 
       if (validation.valid && !options.sourceOnly) {
-        const missingPeers = checkOptionalPeerDependencies(validation.installed, config.projectRoot, {
+        const missingRequiredPeers = findMissingRequiredPeers(validation.installed, config.projectRoot, {
           verbose: options.verbose
         })
 
-        if (missingPeers.length > 0) {
+        if (missingRequiredPeers.length > 0) {
           console.log('\n🧩 Checking peer dependencies...\n')
           console.log('  The following peer dependencies are missing from your dependency tree.')
           console.log('  They are likely required for the worklet bundle to function correctly.\n')
 
           const packagesToInstall: string[] = []
 
-          for (const peer of missingPeers) {
+          for (const peer of missingRequiredPeers) {
             // Determine install version
             const ranges = [...new Set(peer.sources.map(s => s.range))]
             const isSingle = ranges.length === 1
