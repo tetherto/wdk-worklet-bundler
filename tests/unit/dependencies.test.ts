@@ -8,7 +8,11 @@ import {
   generateInstallCommand,
   generateUninstallCommand,
   installDependencies,
-  uninstallDependencies
+  uninstallDependencies,
+  checkOptionalPeerDependencies,
+  findMissingRequiredPeers,
+  findMissingOptionalPeers,
+  scanPeerDependencies
 } from '../../src/validators/dependencies'
 
 describe('Dependency Validator', () => {
@@ -155,6 +159,198 @@ describe('Dependency Validator', () => {
       expect(result.valid).toBe(false)
       expect(result.installed).toHaveLength(1)
       expect(result.missing).toContain('@tetherto/wdk-wallet-evm-erc-4337')
+    })
+  })
+
+  describe('checkOptionalPeerDependencies', () => {
+    const writeModule = (name: string, pkg: Record<string, unknown>): string => {
+      const modulePath = path.join(tempDir, 'node_modules', ...name.split('/'))
+      fs.mkdirSync(modulePath, { recursive: true })
+      fs.writeFileSync(
+        path.join(modulePath, 'package.json'),
+        JSON.stringify({ name, version: '1.0.0', ...pkg })
+      )
+      return modulePath
+    }
+
+    it('should report missing peers not marked as optional', () => {
+      const modulePath = writeModule('@tetherto/wdk-wallet-btc', {
+        peerDependencies: { 'some-required-peer': '^1.0.0' }
+      })
+
+      const missing = checkOptionalPeerDependencies(
+        [{ name: '@tetherto/wdk-wallet-btc', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(missing).toHaveLength(1)
+      expect(missing[0].name).toBe('some-required-peer')
+      expect(missing[0].sources[0].parent).toBe('@tetherto/wdk-wallet-btc')
+    })
+
+    it('should skip peers marked optional via peerDependenciesMeta', () => {
+      const modulePath = writeModule('@bitcoinerlab/descriptors', {
+        peerDependencies: { '@ledgerhq/ledger-bitcoin': '^0.3.1' },
+        peerDependenciesMeta: { '@ledgerhq/ledger-bitcoin': { optional: true } }
+      })
+
+      const missing = checkOptionalPeerDependencies(
+        [{ name: '@bitcoinerlab/descriptors', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(missing).toHaveLength(0)
+    })
+
+    it('should find optional peers declared by transitive dependencies', () => {
+      const btcPath = writeModule('@tetherto/wdk-wallet-btc', {
+        dependencies: { '@bitcoinerlab/descriptors': '^2.0.0' }
+      })
+      writeModule('@bitcoinerlab/descriptors', {
+        peerDependencies: {
+          '@ledgerhq/ledger-bitcoin': '^0.3.1',
+          'some-required-peer': '^1.0.0'
+        },
+        peerDependenciesMeta: { '@ledgerhq/ledger-bitcoin': { optional: true } }
+      })
+
+      const missing = checkOptionalPeerDependencies(
+        [{ name: '@tetherto/wdk-wallet-btc', path: btcPath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(missing.map(m => m.name)).toEqual(['some-required-peer'])
+    })
+
+    it('should not report installed peers', () => {
+      const modulePath = writeModule('@tetherto/wdk-wallet-btc', {
+        peerDependencies: { 'some-required-peer': '^1.0.0' }
+      })
+      writeModule('some-required-peer', {})
+
+      const missing = checkOptionalPeerDependencies(
+        [{ name: '@tetherto/wdk-wallet-btc', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(missing).toHaveLength(0)
+    })
+
+    it('should list missing optional peers for deferral via findMissingOptionalPeers', () => {
+      const modulePath = writeModule('@bitcoinerlab/descriptors', {
+        peerDependencies: { '@ledgerhq/ledger-bitcoin': '^0.3.1' },
+        peerDependenciesMeta: { '@ledgerhq/ledger-bitcoin': { optional: true } }
+      })
+
+      const deferred = findMissingOptionalPeers(
+        [{ name: '@bitcoinerlab/descriptors', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(deferred).toEqual(['@ledgerhq/ledger-bitcoin'])
+    })
+
+    it('should find optional peers declared only in peerDependenciesMeta', () => {
+      // follow-redirects style: no peerDependencies entry at all
+      const modulePath = writeModule('follow-redirects', {
+        peerDependenciesMeta: { debug: { optional: true } }
+      })
+
+      const deferred = findMissingOptionalPeers(
+        [{ name: 'follow-redirects', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(deferred).toEqual(['debug'])
+      expect(checkOptionalPeerDependencies(
+        [{ name: 'follow-redirects', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )).toHaveLength(0)
+    })
+
+    it('should not list installed optional peers for deferral', () => {
+      const modulePath = writeModule('@bitcoinerlab/descriptors', {
+        peerDependencies: { '@ledgerhq/ledger-bitcoin': '^0.3.1' },
+        peerDependenciesMeta: { '@ledgerhq/ledger-bitcoin': { optional: true } }
+      })
+      writeModule('@ledgerhq/ledger-bitcoin', {})
+
+      const deferred = findMissingOptionalPeers(
+        [{ name: '@bitcoinerlab/descriptors', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(deferred).toEqual([])
+    })
+
+    it('should never defer a peer required elsewhere (required scanned first)', () => {
+      const requirerPath = writeModule('pkg-requirer', {
+        peerDependencies: { 'shared-peer': '^4.0.0' }
+      })
+      const optionalPath = writeModule('pkg-optional', {
+        peerDependencies: { 'shared-peer': '*' },
+        peerDependenciesMeta: { 'shared-peer': { optional: true } }
+      })
+      const requirer = { name: 'pkg-requirer', path: requirerPath, version: '1.0.0', isLocal: false }
+      const optional = { name: 'pkg-optional', path: optionalPath, version: '1.0.0', isLocal: false }
+
+      const result = scanPeerDependencies([requirer, optional], tempDir)
+
+      expect(result.missingOptional).toEqual([])
+      expect(result.missing).toHaveLength(1)
+      expect(result.missing[0].name).toBe('shared-peer')
+      // Only the actual requirer is listed as a source — no '*' range pollution
+      expect(result.missing[0].sources).toEqual([{ parent: 'pkg-requirer', range: '^4.0.0' }])
+    })
+
+    it('should never defer a peer required elsewhere (optional scanned first)', () => {
+      const requirerPath = writeModule('pkg-requirer', {
+        peerDependencies: { 'shared-peer': '^4.0.0' }
+      })
+      const optionalPath = writeModule('pkg-optional', {
+        peerDependencies: { 'shared-peer': '*' },
+        peerDependenciesMeta: { 'shared-peer': { optional: true } }
+      })
+      const requirer = { name: 'pkg-requirer', path: requirerPath, version: '1.0.0', isLocal: false }
+      const optional = { name: 'pkg-optional', path: optionalPath, version: '1.0.0', isLocal: false }
+
+      const result = scanPeerDependencies([optional, requirer], tempDir)
+
+      expect(result.missingOptional).toEqual([])
+      expect(result.missing).toHaveLength(1)
+      expect(result.missing[0].name).toBe('shared-peer')
+      expect(result.missing[0].sources).toEqual([{ parent: 'pkg-requirer', range: '^4.0.0' }])
+    })
+
+    it('should ignore meta-only peers not marked optional', () => {
+      const modulePath = writeModule('weird-pkg', {
+        peerDependenciesMeta: { 'not-really-a-peer': {} }
+      })
+
+      const result = scanPeerDependencies(
+        [{ name: 'weird-pkg', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(result.missing).toHaveLength(0)
+      expect(result.missingOptional).toHaveLength(0)
+    })
+
+    it('should keep checkOptionalPeerDependencies as alias of findMissingRequiredPeers', () => {
+      expect(checkOptionalPeerDependencies).toBe(findMissingRequiredPeers)
+    })
+
+    it('should skip ignored peer prefixes', () => {
+      const modulePath = writeModule('@tetherto/wdk-wallet-btc', {
+        peerDependencies: { 'react-native': '*', react: '*' }
+      })
+
+      const missing = checkOptionalPeerDependencies(
+        [{ name: '@tetherto/wdk-wallet-btc', path: modulePath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(missing).toHaveLength(0)
     })
   })
 
