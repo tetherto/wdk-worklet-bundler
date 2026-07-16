@@ -51,6 +51,14 @@ export const configSchema = {
       items: { type: 'string' },
       description: 'Modules to preload (native addons)'
     },
+    allowedMethods: {
+      type: 'object',
+      additionalProperties: {
+        type: 'array',
+        items: { type: 'string' }
+      },
+      description: 'Map of surface name (network/protocol/module key) to the list of method names it allows'
+    },
     transport: {
       type: 'string',
       enum: ['hrpc', 'jsonrpc'],

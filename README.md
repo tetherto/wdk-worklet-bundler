@@ -232,6 +232,16 @@ module.exports = {
   // Native addons that must be required before anything else.
   preloadModules: ["spark-frost-bare-addon"],
 
+  // ── Allowed methods ───────────────────────────────────────
+  // Restrict which methods can be invoked per surface (network,
+  // protocol, or module key). A surface not listed here is left
+  // unrestricted; a surface listed with an array only allows those
+  // method names.
+  allowedMethods: {
+    ethereum: ["getAddress", "getBalance", "sendTransaction", "signMessage"],
+    aaveEvm: ["quoteSwap"],
+  },
+
   // ── Output paths ──────────────────────────────────────────
   output: {
     // Bundle output path.

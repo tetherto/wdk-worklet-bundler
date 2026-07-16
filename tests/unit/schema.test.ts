@@ -98,5 +98,24 @@ describe('Config Schema Validation', () => {
       }
       expect(() => validateConfig(config)).toThrow('must have required property \'package\'')
     })
+
+    it('should validate a config with allowedMethods', () => {
+      const config = {
+        networks: { ethereum: { package: 'pkg' } },
+        allowedMethods: {
+          ethereum: ['getAddress', 'getBalance'],
+          uniswap: ['quoteSwap']
+        }
+      }
+      expect(() => validateConfig(config)).not.toThrow()
+    })
+
+    it('should fail if allowedMethods entries are not string arrays', () => {
+      const config = {
+        networks: { eth: { package: 'pkg' } },
+        allowedMethods: { eth: 'getAddress' }
+      }
+      expect(() => validateConfig(config)).toThrow('must be array')
+    })
   })
 })
