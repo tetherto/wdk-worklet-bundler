@@ -246,6 +246,27 @@ describe('Code Generators', () => {
       expect(content).toContain("moduleManagers: typeof moduleManagers !== 'undefined' ? moduleManagers : {}")
     })
 
+    it('should wire allowedMethods into context when configured', async () => {
+      const config = createMockConfig({
+        allowedMethods: {
+          ethereum: ['getAddress', 'getBalance'],
+          uniswap: ['quoteSwap']
+        }
+      })
+      const entryPath = await generateEntryPoint(config, tempDir)
+      const content = fs.readFileSync(entryPath, 'utf-8')
+
+      expect(content).toContain('allowedMethods: {"ethereum":["getAddress","getBalance"],"uniswap":["quoteSwap"]}')
+    })
+
+    it('should default allowedMethods to an empty map when none configured', async () => {
+      const config = createMockConfig()
+      const entryPath = await generateEntryPoint(config, tempDir)
+      const content = fs.readFileSync(entryPath, 'utf-8')
+
+      expect(content).toContain('allowedMethods: {}')
+    })
+
     it('should create output directory if it does not exist', async () => {
       const config = createMockConfig()
       const nestedDir = path.join(tempDir, 'nested', 'output')

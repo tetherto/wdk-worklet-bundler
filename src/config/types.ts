@@ -37,6 +37,15 @@ export interface WdkBundleConfig {
   /** Modules to preload (native addons like spark-frost-bare-addon) */
   preloadModules?: string[]
 
+  /**
+   * Restrict which methods can be invoked per surface (network, protocol, or
+   * module key). Surfaces omitted here are left unrestricted; a surface listed
+   * with an array only allows those method names.
+   */
+  allowedMethods?: {
+    [surfaceName: string]: string[]
+  }
+
   /** Transport mechanism for worklet communication */
   transport?: 'hrpc' | 'jsonrpc'
 
