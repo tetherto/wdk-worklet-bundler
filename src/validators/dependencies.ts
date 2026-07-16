@@ -77,6 +77,60 @@ export function resolveModule (
   }
 }
 
+/**
+ * Check whether a package is installed anywhere in the dependency tree —
+ * hoisted at the root OR nested under another package's node_modules.
+ */
+export function isInstalledAnywhere (
+  name: string,
+  projectRoot: string
+): boolean {
+  const rootNodeModules = path.join(projectRoot, 'node_modules')
+  const stack: string[] = [rootNodeModules]
+  const visited = new Set<string>()
+
+  while (stack.length > 0) {
+    const nodeModules = stack.pop() as string
+    if (visited.has(nodeModules) || !fs.existsSync(nodeModules)) continue
+    visited.add(nodeModules)
+
+    if (fs.existsSync(path.join(nodeModules, ...name.split('/'), 'package.json'))) {
+      return true
+    }
+
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(nodeModules, { withFileTypes: true })
+    } catch {
+      continue
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+
+      if (entry.name.startsWith('@')) {
+        // Scope directory (e.g. @scure) — descend into each scoped package.
+        const scopeDir = path.join(nodeModules, entry.name)
+        let scoped: fs.Dirent[]
+        try {
+          scoped = fs.readdirSync(scopeDir, { withFileTypes: true })
+        } catch {
+          continue
+        }
+        for (const pkg of scoped) {
+          if (pkg.isDirectory()) {
+            stack.push(path.join(scopeDir, pkg.name, 'node_modules'))
+          }
+        }
+      } else {
+        stack.push(path.join(nodeModules, entry.name, 'node_modules'))
+      }
+    }
+  }
+
+  return false
+}
+
 export function validateDependencies (
   modules: string[],
   projectRoot: string
@@ -219,6 +273,10 @@ export function scanPeerDependencies (
           // in @bitcoinerlab/descriptors) — never report them as missing,
           // but track them so bare-pack can defer their resolution.
           if (isOptional) {
+            if (isInstalledAnywhere(peerName, projectRoot)) {
+              log(`  [scan] Optional peer present nested, not deferring: ${peerName}`)
+              continue
+            }
             log(`  [scan] Optional peer not installed, will defer: ${peerName}`)
             missingOptional.add(peerName)
             continue

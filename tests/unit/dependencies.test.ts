@@ -12,7 +12,8 @@ import {
   checkOptionalPeerDependencies,
   findMissingRequiredPeers,
   findMissingOptionalPeers,
-  scanPeerDependencies
+  scanPeerDependencies,
+  isInstalledAnywhere
 } from '../../src/validators/dependencies'
 
 describe('Dependency Validator', () => {
@@ -281,6 +282,46 @@ describe('Dependency Validator', () => {
       )
 
       expect(deferred).toEqual([])
+    })
+
+    it('should not defer an optional peer that is present nested under another package', () => {
+      // Real-world shape: @bitcoinerlab/descriptors-core (pulled by wdk-wallet-btc)
+      // declares @scure/btc-signer as an optional peer, while @buildonspark/spark-sdk
+      // (pulled by wdk-wallet-spark) genuinely depends on it — nested under spark-sdk
+      // because a version conflict prevents hoisting. Deferring it drops it from the
+      // bundle and fails at runtime with MODULE_NOT_FOUND.
+      const descriptorsPath = writeModule('@bitcoinerlab/descriptors-core', {
+        peerDependencies: { '@scure/btc-signer': '^1.5.0' },
+        peerDependenciesMeta: { '@scure/btc-signer': { optional: true } }
+      })
+      // Present nested: node_modules/@buildonspark/spark-sdk/node_modules/@scure/btc-signer
+      const sparkNested = path.join(
+        tempDir, 'node_modules', '@buildonspark', 'spark-sdk',
+        'node_modules', '@scure', 'btc-signer'
+      )
+      fs.mkdirSync(sparkNested, { recursive: true })
+      fs.writeFileSync(
+        path.join(sparkNested, 'package.json'),
+        JSON.stringify({ name: '@scure/btc-signer', version: '1.8.1' })
+      )
+
+      const deferred = findMissingOptionalPeers(
+        [{ name: '@bitcoinerlab/descriptors-core', path: descriptorsPath, version: '1.0.0', isLocal: false }],
+        tempDir
+      )
+
+      expect(deferred).toEqual([])
+    })
+
+    it('isInstalledAnywhere finds hoisted, nested, and absent packages', () => {
+      writeModule('hoisted-pkg', {})
+      const nested = path.join(tempDir, 'node_modules', 'parent-pkg', 'node_modules', 'nested-pkg')
+      fs.mkdirSync(nested, { recursive: true })
+      fs.writeFileSync(path.join(nested, 'package.json'), JSON.stringify({ name: 'nested-pkg', version: '1.0.0' }))
+
+      expect(isInstalledAnywhere('hoisted-pkg', tempDir)).toBe(true)
+      expect(isInstalledAnywhere('nested-pkg', tempDir)).toBe(true)
+      expect(isInstalledAnywhere('@ledgerhq/ledger-bitcoin', tempDir)).toBe(false)
     })
 
     it('should never defer a peer required elsewhere (required scanned first)', () => {
