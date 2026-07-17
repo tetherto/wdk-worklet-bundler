@@ -471,6 +471,28 @@ describe('Dependency Validator', () => {
       expect(checkOptionalPeerDependencies).toBe(findMissingRequiredPeers)
     })
 
+    it('skipOptional skips optional-peer bookkeeping without affecting missing', () => {
+      const modulePath = writeModule('@tetherto/wdk-wallet-btc', {
+        peerDependencies: {
+          'some-required-peer': '^1.0.0',
+          '@ledgerhq/ledger-bitcoin': '^0.3.1'
+        },
+        peerDependenciesMeta: { '@ledgerhq/ledger-bitcoin': { optional: true } }
+      })
+      const installedModules = [{ name: '@tetherto/wdk-wallet-btc', path: modulePath, version: '1.0.0', isLocal: false }]
+
+      const full = scanPeerDependencies(installedModules, tempDir)
+      const skipped = scanPeerDependencies(installedModules, tempDir, { skipOptional: true })
+
+      // .missing is identical either way — optional peers never contribute to it
+      expect(skipped.missing.map(m => m.name)).toEqual(full.missing.map(m => m.name))
+      expect(skipped.missing.map(m => m.name)).toEqual(['some-required-peer'])
+
+      // optional bookkeeping only happens on the full scan
+      expect(full.missingOptional).toEqual(['@ledgerhq/ledger-bitcoin'])
+      expect(skipped.missingOptional).toEqual([])
+    })
+
     it('should skip ignored peer prefixes', () => {
       const modulePath = writeModule('@tetherto/wdk-wallet-btc', {
         peerDependencies: { 'react-native': '*', react: '*' }

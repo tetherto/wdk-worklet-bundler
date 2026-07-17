@@ -79,7 +79,7 @@ export function resolveModule (
 
 /**
  * Walk the entire node_modules tree — root, nested, and scoped — and collect
- * the names of every installed package. Walked once and queried by name;
+ * the names of every installed package. Walked once and queried by name.
  */
 export function collectInstalledPackages (projectRoot: string): Set<string> {
   const installed = new Set<string>()
@@ -183,7 +183,9 @@ export function findMissingRequiredPeers (
   projectRoot: string,
   options: { verbose?: boolean } = {}
 ): MissingPeer[] {
-  return scanPeerDependencies(installedModules, projectRoot, options).missing
+  // Callers only consume .missing — skip the optional-peer bookkeeping so
+  // this scan never pays the full node_modules walk.
+  return scanPeerDependencies(installedModules, projectRoot, { ...options, skipOptional: true }).missing
 }
 
 /**
@@ -203,7 +205,7 @@ export function findMissingOptionalPeers (
 export function scanPeerDependencies (
   installedModules: ModuleInfo[],
   projectRoot: string,
-  options: { verbose?: boolean } = {}
+  options: { verbose?: boolean, skipOptional?: boolean } = {}
 ): PeerScanResult {
   const missingPeers = new Map<string, MissingPeer>()
   const missingOptional = new Set<string>()
@@ -291,6 +293,10 @@ export function scanPeerDependencies (
           // in @bitcoinerlab/descriptors) — never report them as missing,
           // but track them so bare-pack can defer their resolution.
           if (isOptional) {
+            // skipOptional: caller only wants .missing — don't trigger the
+            // node_modules walk or collect deferral candidates.
+            if (options.skipOptional === true) continue
+
             if (isPeerInstalledAnywhere(peerName)) {
               log(`  [scan] Optional peer present nested, not deferring: ${peerName}`)
               continue
