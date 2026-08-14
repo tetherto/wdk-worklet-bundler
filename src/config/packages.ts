@@ -11,6 +11,8 @@ export function getPackageList (config: WdkBundleConfig): string[] {
   // For validation, we should probably check it.
   packages.add('@tetherto/wdk')
   packages.add('bare-node-runtime')
+  // Both generated transports import a subpath from this package.
+  packages.add('@tetherto/pear-wrk-wdk')
 
   if (config.networks) {
     for (const net of Object.values(config.networks)) {

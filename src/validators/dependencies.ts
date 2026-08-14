@@ -376,6 +376,22 @@ export function detectPackageManager (
   return 'npm'
 }
 
+/**
+ * Convert a module specifier into the package that provides it.
+ *
+ * For example, `@tetherto/pear-wrk-wdk/worklet` is an exported subpath of
+ * `@tetherto/pear-wrk-wdk`, not a package that can be installed directly.
+ */
+export function getInstallablePackageName (moduleSpecifier: string): string {
+  const parts = moduleSpecifier.split('/')
+
+  if (moduleSpecifier.startsWith('@')) {
+    return parts.length >= 2 ? parts.slice(0, 2).join('/') : moduleSpecifier
+  }
+
+  return parts[0] || moduleSpecifier
+}
+
 export function generateInstallCommand (
   missing: string[],
   packageManager: 'npm' | 'yarn' | 'pnpm' = 'npm'

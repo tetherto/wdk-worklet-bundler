@@ -5,6 +5,7 @@ import {
   resolveModule,
   validateDependencies,
   detectPackageManager,
+  getInstallablePackageName,
   generateInstallCommand,
   generateUninstallCommand,
   installDependencies,
@@ -526,6 +527,23 @@ describe('Dependency Validator', () => {
       fs.writeFileSync(path.join(tempDir, 'pnpm-lock.yaml'), '')
       fs.writeFileSync(path.join(tempDir, 'yarn.lock'), '')
       expect(detectPackageManager(tempDir)).toBe('pnpm')
+    })
+  })
+
+  describe('getInstallablePackageName', () => {
+    it('normalizes a scoped package subpath', () => {
+      expect(getInstallablePackageName('@tetherto/pear-wrk-wdk/worklet'))
+        .toBe('@tetherto/pear-wrk-wdk')
+    })
+
+    it('normalizes an unscoped package subpath', () => {
+      expect(getInstallablePackageName('package/subpath')).toBe('package')
+    })
+
+    it('leaves package roots unchanged', () => {
+      expect(getInstallablePackageName('@tetherto/pear-wrk-wdk'))
+        .toBe('@tetherto/pear-wrk-wdk')
+      expect(getInstallablePackageName('package')).toBe('package')
     })
   })
 
