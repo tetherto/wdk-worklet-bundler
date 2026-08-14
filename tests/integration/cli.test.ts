@@ -139,6 +139,22 @@ module.exports = {
       expect(output).toContain('No wdk.config.js found')
     })
 
+    it('should reject modules when a CLI override selects jsonrpc', () => {
+      const config = `
+module.exports = {
+  transport: 'hrpc',
+  networks: { ethereum: { package: '@tetherto/wdk-wallet-evm' } },
+  modules: { addressBook: { package: '@tetherto/wdk-p2p-address-book' } },
+};
+`
+      fs.writeFileSync(path.join(tempDir, 'wdk.config.js'), config)
+
+      const output = runCli('generate --transport jsonrpc')
+
+      expect(output).toContain("bundled modules are only supported on the 'hrpc' transport")
+      expect(output).not.toContain('Checking core dependencies')
+    })
+
     it('should fail when dependencies are missing', () => {
       const config = `
 module.exports = {

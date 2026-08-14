@@ -42,6 +42,7 @@ export interface WdkBundleConfig {
    * Generic module definitions: key -> package + optional factory/events. The
    * package exports createModule({ seed, config, capabilities, emit }) -> instance;
    * a module needing storage builds it from config (e.g. config.storagePath).
+   * Bundled modules are currently supported only by the 'hrpc' transport.
    */
   modules?: {
     [moduleName: string]: {

@@ -91,6 +91,27 @@ describe('Config Schema Validation', () => {
       expect(() => validateConfig(config)).not.toThrow()
     })
 
+    it('should reject bundled modules with the jsonrpc transport', () => {
+      const config = {
+        transport: 'jsonrpc',
+        networks: { eth: { package: 'pkg' } },
+        modules: { addressBook: { package: '@tetherto/wdk-p2p-address-book' } }
+      }
+
+      expect(() => validateConfig(config))
+        .toThrow("bundled modules are only supported on the 'hrpc' transport")
+    })
+
+    it('should allow an empty modules map with the jsonrpc transport', () => {
+      const config = {
+        transport: 'jsonrpc',
+        networks: { eth: { package: 'pkg' } },
+        modules: {}
+      }
+
+      expect(() => validateConfig(config)).not.toThrow()
+    })
+
     it('should fail if a module package is missing', () => {
       const config = {
         networks: { eth: { package: 'pkg' } },

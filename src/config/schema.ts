@@ -53,7 +53,7 @@ export const configSchema = {
           events: { type: 'array', items: { type: 'string' }, description: 'Events forwarded host-ward as moduleEvent' }
         }
       },
-      description: 'Map of module keys to a generic module package + optional factory/events'
+      description: "Map of module keys to a generic module package + optional factory/events (HRPC transport only)"
     },
     preloadModules: {
       type: 'array',
@@ -151,4 +151,12 @@ export function validateConfigSchema (config: unknown): asserts config is WdkBun
  */
 export function validateConfig (config: unknown): asserts config is WdkBundleConfig {
   validateConfigSchema(config)
+
+  if (
+    config.transport === 'jsonrpc' &&
+    config.modules != null &&
+    Object.keys(config.modules).length > 0
+  ) {
+    throw new Error("Invalid configuration: bundled modules are only supported on the 'hrpc' transport")
+  }
 }

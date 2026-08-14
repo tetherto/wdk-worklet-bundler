@@ -296,6 +296,10 @@ module.exports = {
 };
 ```
 
+Generic `modules` are currently supported only with the `hrpc` transport.
+Configuration validation rejects a non-empty `modules` map with `jsonrpc` so a
+bundle cannot be generated successfully while silently omitting its modules.
+
 ---
 
 ## `addons.yml` — BareKit Swift Integration
