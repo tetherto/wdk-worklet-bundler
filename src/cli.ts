@@ -65,7 +65,7 @@ program
   .option('--platforms <platforms>', 'Comma-separated platforms for addons: ios,macos,android')
   .option('--no-defer-optional-peers', 'Fail on missing optional peer deps (e.g. Ledger support) instead of deferring them to runtime')
   .action(async (options: GenerateOptions) => {
-    const { loadConfig } = await import('./config/loader')
+    const { loadConfig, validateConfig } = await import('./config/loader')
     const {
       validateDependencies,
       installDependencies,
@@ -137,6 +137,9 @@ program
           }
         }
       }
+
+      // CLI overrides are applied after loadConfig's initial validation.
+      validateConfig(config)
 
       console.log('\n📦 Checking core dependencies...\n')
       const requiredPackages = getPackageList(config)
