@@ -277,6 +277,12 @@ module.exports = {
 
   // ── Build options ─────────────────────────────────────────
   options: {
+    // Minify the generated bundle (default: false)
+    minify: true,
+
+    // Generate source maps (default: false)
+    sourceMaps: true,
+
     // bare-pack host targets (default: all iOS + Android targets)
     targets: ["ios-arm64", "ios-arm64-simulator", "ios-x64-simulator"],
 
@@ -290,6 +296,13 @@ module.exports = {
     // Swift target name used in addons.yml.
     // Defaults to 'app'. Set this to your Xcode target name if it differs.
     swiftTarget: "MyApp",
+
+    // Convert ESM to CJS for engines without ESM support in Bare (default: false)
+    convertEsmToCjs: true,
+
+    // Enable pear-wrk-wdk's handle-leak diagnostic. Use a positive number to
+    // override its tick interval; omit to disable (default: disabled).
+    handleLeakCheck: true,
   },
 };
 ```
