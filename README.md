@@ -23,7 +23,7 @@ Uses JSON-RPC 2.0 with length-prefixed framing over BareKit IPC. Required for Sw
 When `transport: 'jsonrpc'` is set:
 
 - The bundle is output **without a `.js` extension** (BareKit loads it as binary)
-- All ESM modules in the bundle are **automatically converted to CJS** via esbuild (JSC on iOS/macOS has no ES module support)
+- Set `options.convertEsmToCjs: true` to convert ESM modules to CJS via esbuild. This is **required for iOS/macOS (JavaScriptCore) and QuickJS targets** and optional only for V8. The option defaults to `false` for both transports.
 - `linkAddons` defaults to `true` — native xcframework files are linked automatically
 - `addons.yml` is generated automatically inside `ios-addons/` for BareKit Swift integration
 
@@ -99,6 +99,7 @@ npx @tetherto/wdk-worklet-bundler
      },
      options: {
        platforms: ["ios"], // or ['ios', 'macos', 'android']
+       convertEsmToCjs: true, // required for JSC and QuickJS; optional for V8
      },
      output: {
        bundle: "./.wdk-bundle/wdk-worklet.mobile.bundle",
@@ -115,7 +116,7 @@ npx @tetherto/wdk-worklet-bundler
    This will:
    - Generate the JSON-RPC worklet entry point
    - Run `bare-pack` to create the binary bundle
-   - Convert all ESM modules to CJS (required for JSC)
+   - Convert all ESM modules to CJS using `convertEsmToCjs: true` (required for JSC and QuickJS)
    - Run `bare-link` to copy native xcframeworks into `ios-addons/`
    - Generate `ios-addons/addons.yml` for BareKit Swift integration
 
@@ -297,7 +298,8 @@ module.exports = {
     // Defaults to 'app'. Set this to your Xcode target name if it differs.
     swiftTarget: "MyApp",
 
-    // Convert ESM to CJS for engines without ESM support in Bare (default: false)
+    // Convert ESM to CJS (default: false for both transports).
+    // Required for iOS/macOS (JSC) and QuickJS; optional only for V8.
     convertEsmToCjs: true,
 
     // Enable pear-wrk-wdk's handle-leak diagnostic. Use a positive number to
