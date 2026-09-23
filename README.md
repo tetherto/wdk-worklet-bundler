@@ -376,7 +376,7 @@ Run `wdk-worklet-bundler generate --install`. This installs all packages defined
 This happens when ESM modules are loaded eagerly at bundle startup. The bundler handles this in two ways:
 
 1. Wallet modules are lazy-loaded via a Proxy — they are only `require()`'d when first accessed, not at startup
-2. The ESM→CJS conversion step (run automatically for `jsonrpc`) rewrites all ESM syntax to CJS so JSC can handle it
+2. The ESM→CJS conversion step (enabled with `options.convertEsmToCjs: true`, required for JSC and QuickJS) rewrites all ESM syntax to CJS so the engine can load it
 
 If you see this error, make sure you're using a recent version of the bundler that includes both fixes.
 
