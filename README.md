@@ -278,10 +278,12 @@ module.exports = {
 
   // ── Build options ─────────────────────────────────────────
   options: {
-    // Minify the generated bundle (default: false)
+    // Minify the generated bundle (default: false).
+    // Accepted by the config schema but not applied by the bundler yet.
     minify: true,
 
-    // Generate source maps (default: false)
+    // Generate source maps (default: false).
+    // Accepted by the config schema but not applied by the bundler yet.
     sourceMaps: true,
 
     // bare-pack host targets (default: all iOS + Android targets)
