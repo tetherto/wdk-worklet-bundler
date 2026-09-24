@@ -23,7 +23,7 @@ Uses JSON-RPC 2.0 with length-prefixed framing over BareKit IPC. Required for Sw
 When `transport: 'jsonrpc'` is set:
 
 - The bundle is output **without a `.js` extension** (BareKit loads it as binary)
-- All ESM modules in the bundle are **automatically converted to CJS** via esbuild (JSC on iOS/macOS has no ES module support)
+- Set `options.convertEsmToCjs: true` to convert ESM modules to CJS via esbuild. This is **required for iOS/macOS (JavaScriptCore) and QuickJS targets** and optional only for V8. The option defaults to `false` for both transports.
 - `linkAddons` defaults to `true` — native xcframework files are linked automatically
 - `addons.yml` is generated automatically inside `ios-addons/` for BareKit Swift integration
 
@@ -99,6 +99,7 @@ npx @tetherto/wdk-worklet-bundler
      },
      options: {
        platforms: ["ios"], // or ['ios', 'macos', 'android']
+       convertEsmToCjs: true, // required for JSC and QuickJS; optional for V8
      },
      output: {
        bundle: "./.wdk-bundle/wdk-worklet.mobile.bundle",
@@ -115,7 +116,7 @@ npx @tetherto/wdk-worklet-bundler
    This will:
    - Generate the JSON-RPC worklet entry point
    - Run `bare-pack` to create the binary bundle
-   - Convert all ESM modules to CJS (required for JSC)
+   - Convert all ESM modules to CJS using `convertEsmToCjs: true` (required for JSC and QuickJS)
    - Run `bare-link` to copy native xcframeworks into `ios-addons/`
    - Generate `ios-addons/addons.yml` for BareKit Swift integration
 
@@ -277,6 +278,14 @@ module.exports = {
 
   // ── Build options ─────────────────────────────────────────
   options: {
+    // Minify the generated bundle (default: false).
+    // Accepted by the config schema but not applied by the bundler yet.
+    minify: true,
+
+    // Generate source maps (default: false).
+    // Accepted by the config schema but not applied by the bundler yet.
+    sourceMaps: true,
+
     // bare-pack host targets (default: all iOS + Android targets)
     targets: ["ios-arm64", "ios-arm64-simulator", "ios-x64-simulator"],
 
@@ -290,6 +299,14 @@ module.exports = {
     // Swift target name used in addons.yml.
     // Defaults to 'app'. Set this to your Xcode target name if it differs.
     swiftTarget: "MyApp",
+
+    // Convert ESM to CJS (default: false for both transports).
+    // Required for iOS/macOS (JSC) and QuickJS; optional only for V8.
+    convertEsmToCjs: true,
+
+    // Enable pear-wrk-wdk's handle-leak diagnostic. Use a positive number to
+    // override its tick interval; omit to disable (default: disabled).
+    handleLeakCheck: true,
   },
 };
 ```
@@ -361,7 +378,7 @@ Run `wdk-worklet-bundler generate --install`. This installs all packages defined
 This happens when ESM modules are loaded eagerly at bundle startup. The bundler handles this in two ways:
 
 1. Wallet modules are lazy-loaded via a Proxy — they are only `require()`'d when first accessed, not at startup
-2. The ESM→CJS conversion step (run automatically for `jsonrpc`) rewrites all ESM syntax to CJS so JSC can handle it
+2. The ESM→CJS conversion step (enabled with `options.convertEsmToCjs: true`, required for JSC and QuickJS) rewrites all ESM syntax to CJS so the engine can load it
 
 If you see this error, make sure you're using a recent version of the bundler that includes both fixes.
 
