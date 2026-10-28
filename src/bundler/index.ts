@@ -191,6 +191,7 @@ export async function generateBundle (
       packed = await packBundle({
         entry: entryPath,
         convertEsmToCjs,
+        minify: config.options?.minify,
         packOptions: {
           base: pathToFileURL(config.projectRoot).href,
           hosts: targets,
