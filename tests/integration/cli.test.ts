@@ -204,6 +204,44 @@ exports.utils = { logger: { info: () => {}, error: () => {} } };
       expect(fs.readFileSync(bundlePath).includes(Buffer.from('addressBook'))).toBe(true)
     })
 
+    it('should forward options.minify from wdk.config.js to the bundle', () => {
+      const config = `
+module.exports = {
+  transport: 'jsonrpc',
+  networks: { ethereum: { package: '@tetherto/wdk-wallet-evm' } },
+  options: { minify: true },
+  output: { bundle: './out/wdk.bundle' },
+};
+`
+      fs.writeFileSync(path.join(tempDir, 'wdk.config.js'), config)
+
+      mockPackageFiles('@tetherto/wdk', {
+        'index.js': 'module.exports = class WDK {}\n'
+      })
+      mockPackageFiles('bare-node-runtime', {
+        'global.js': 'module.exports = {}\n',
+        'imports.json': '{}\n'
+      })
+      mockPackageFiles('@tetherto/wdk-wallet-evm', {
+        'index.js': "exports.answer = function (descriptiveParameter) { return descriptiveParameter }\nexports.data = require('./data.json')\n",
+        'data.json': '{\n  "answer": 42\n}\n'
+      })
+      mockPackageFiles('@tetherto/pear-wrk-wdk', {
+        'jsonrpc.js': `
+exports.registerJsonRpcHandlers = () => {};
+exports.utils = { logger: { info: () => {}, error: () => {} } };
+`
+      })
+
+      const output = runCli('generate --skip-link-addons --keep-artifacts --no-types')
+      const bundle = fs.readFileSync(path.join(tempDir, 'out', 'wdk.bundle'))
+
+      expect(output).toContain('Bundle generated successfully')
+      expect(bundle.includes(Buffer.from('descriptiveParameter'))).toBe(false)
+      expect(bundle.includes(Buffer.from('{"answer":42}'))).toBe(true)
+      expect(bundle.includes(Buffer.from('{\n  "answer": 42\n}'))).toBe(false)
+    })
+
     it('should fail when dependencies are missing', () => {
       const config = `
 module.exports = {

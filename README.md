@@ -281,8 +281,8 @@ module.exports = {
 
   // ── Build options ─────────────────────────────────────────
   options: {
-    // Minify the generated bundle (default: false).
-    // Accepted by the config schema but not applied by the bundler yet.
+    // Minify JavaScript and compact JSON in the generated bundle (default: false).
+    // Applied independently of convertEsmToCjs.
     minify: true,
 
     // Generate source maps (default: false).
