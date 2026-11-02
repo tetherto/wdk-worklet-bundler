@@ -9,7 +9,7 @@ import path from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
 import type Bundle from 'bare-bundle'
 import type { PackOptions } from 'bare-pack'
-import { isJavaScriptPath, stripModuleType, transformEsmToCjs } from './esm-to-cjs'
+import { isJavaScriptPath, minifyJavaScript, stripModuleType, transformEsmToCjs } from './esm-to-cjs'
 
 /** A module specifier, optionally nested under resolution conditions (bare-module-resolve's shape, via bare-pack's typings). */
 export type ConditionalSpecifier = NonNullable<PackOptions['builtins']>[number]
@@ -34,7 +34,7 @@ export interface PackBundleOptions {
    * (JSC, QuickJS). Defaults to false.
    */
   convertEsmToCjs?: boolean
-  /** Minify converted sources. Only applies with `convertEsmToCjs`. Defaults to true. */
+  /** Minify JavaScript and compact JSON while packing. Defaults to false. */
   minify?: boolean
 }
 
@@ -87,14 +87,14 @@ const bundleId = require('bare-bundle-id') as (bundle: Bundle) => Buffer
  *
  * @throws {Error} Whatever bare-pack throws: a bare-module-traverse error
  *   with a `code` such as `MODULE_NOT_FOUND` (with `specifier` and
- *   `referrer`), or, when `convertEsmToCjs` is on, esbuild's TransformFailure
- *   for the first module that cannot be converted, naming the file.
+ *   `referrer`), or, when transforms are enabled, esbuild's TransformFailure
+ *   for the first module that cannot be transformed, naming the file.
  */
 export async function packBundle (options: PackBundleOptions): Promise<PackBundleResult> {
-  const { entry, packOptions, convertEsmToCjs = false, minify = true } = options
+  const { entry, packOptions, convertEsmToCjs = false, minify = false } = options
 
   const stats: EsmToCjsStats = { converted: 0, packagesPatched: 0 }
-  const readModule = convertEsmToCjs ? convertingReadModule(stats, minify) : readModuleFromDisk
+  const readModule = convertEsmToCjs || minify ? transformingReadModule(stats, convertEsmToCjs, minify) : readModuleFromDisk
 
   const bundle = await pack(pathToFileURL(entry), {
     ...packOptions,
@@ -118,34 +118,42 @@ export async function packBundle (options: PackBundleOptions): Promise<PackBundl
 }
 
 /**
- * readModule that converts JavaScript to CommonJS and strips `"type": "module"`
- * from package manifests as bare-pack reads each file. bare-pack ≥ 2.2
- * memoizes reads, so each file is transformed once however many hosts are
- * packed. A file that cannot be converted fails the pack right there.
+ * readModule that applies enabled JavaScript and JSON transforms as bare-pack
+ * reads each file. bare-pack ≥ 2.2 memoizes reads, so each file is transformed
+ * once however many hosts are packed.
  */
-function convertingReadModule (stats: EsmToCjsStats, minify: boolean): ReadModule {
+function transformingReadModule (stats: EsmToCjsStats, convertEsmToCjs: boolean, minify: boolean): ReadModule {
   return async (url) => {
     const source = await readModuleFromDisk(url)
     if (source === null) return null
 
     const filePath = fileURLToPath(url)
     if (isJavaScriptPath(filePath)) {
-      const code = transformEsmToCjs(source.toString(), { minify, sourcefile: filePath })
-      stats.converted++
-      return Buffer.from(code)
+      if (convertEsmToCjs) {
+        const code = transformEsmToCjs(source.toString(), { minify, sourcefile: filePath })
+        stats.converted++
+        return Buffer.from(code)
+      }
+      return Buffer.from(minifyJavaScript(source.toString(), filePath))
     }
-    if (filePath.endsWith(`${path.sep}package.json`)) {
-      let patched: string | null
+
+    let patched: string | null = null
+    if (convertEsmToCjs && filePath.endsWith(`${path.sep}package.json`)) {
       try {
         patched = stripModuleType(source.toString())
       } catch (e) {
         throw new Error(`${filePath}: ${e instanceof Error ? e.message : String(e)}`)
       }
-      if (patched !== null) {
-        stats.packagesPatched++
-        return Buffer.from(patched)
+      if (patched !== null) stats.packagesPatched++
+    }
+
+    if (minify && filePath.endsWith('.json')) {
+      try {
+        return Buffer.from(JSON.stringify(JSON.parse(patched ?? source.toString())))
+      } catch (e) {
+        throw new Error(`${filePath}: ${e instanceof Error ? e.message : String(e)}`)
       }
     }
-    return source
+    return patched === null ? source : Buffer.from(patched)
   }
 }

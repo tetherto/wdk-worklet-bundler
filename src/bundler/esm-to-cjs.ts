@@ -1,10 +1,8 @@
 /**
- * ESM→CJS source transforms applied inflight while bare-pack traverses the
- * module graph (see pack.ts), for engines whose Bare port can't load ES
- * modules: JSC on iOS/macOS exposes no ESM through Apple's public C API, and
- * QuickJS on Bare rejects dynamic `import()`. V8 loads either form.
+ * JavaScript source transforms applied inflight while bare-pack traverses
+ * the module graph (see pack.ts).
  *
- * Because the transform runs inside bare-pack's `readModule`, resolution
+ * Because the transforms run inside bare-pack's `readModule`, resolution
  * still happens against the original package manifests under `require`
  * conditions, so packages that ship a CJS build resolve to it and only the
  * ESM-only remainder is machine-converted here.
@@ -43,6 +41,16 @@ export function transformEsmToCjs (source: string, options: EsmToCjsTransformOpt
     supported: { 'dynamic-import': false },
     minify,
     legalComments: minify ? 'none' : 'eof'
+  }).code
+}
+
+/** Minify without selecting an output module format, preserving ESM when conversion is off. */
+export function minifyJavaScript (source: string, sourcefile?: string): string {
+  return transformSync(source, {
+    sourcefile,
+    target: 'es2020',
+    minify: true,
+    legalComments: 'none'
   }).code
 }
 

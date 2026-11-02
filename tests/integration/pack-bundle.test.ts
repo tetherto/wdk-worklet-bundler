@@ -87,6 +87,7 @@ describe('packBundle against the real bare-pack', () => {
       "export async function lazy () { return (await import('./extra.mjs')).default }\n" +
       'export const value = 42\n')
     fs.writeFileSync(path.join(dep, 'extra.mjs'), "export default 'extra-loaded'\n")
+    fs.writeFileSync(path.join(projDir, 'data.json'), '{\n  "answer": 42\n}\n')
 
     const native = path.join(projDir, 'node_modules/native-dep')
     fs.mkdirSync(native, { recursive: true })
@@ -98,6 +99,7 @@ describe('packBundle against the real bare-pack', () => {
     fs.writeFileSync(entry,
       "const dep = require('esm-dep')\n" +
       "exports.dep = dep\n" +
+      "exports.data = require('./data.json')\n" +
       "exports.loadNative = () => require('native-dep')\n")
   })
 
@@ -118,6 +120,7 @@ describe('packBundle against the real bare-pack', () => {
       expect(keys).toContain('/node_modules/esm-dep/extra.js')
       expect(keys.some(k => k.endsWith('.mjs'))).toBe(false)
       expect(JSON.parse(readFile(result.bundle, '/node_modules/esm-dep/package.json'))).not.toHaveProperty('type')
+      expect(readFile(result.bundle, '/data.json')).toBe('{\n  "answer": 42\n}\n')
       expect(result.bundle.main).toBe('/entry.js')
       expect(result.esmToCjs).toEqual({ converted: 4, packagesPatched: 1 })
       expect(result.files).toBe(keys.length)
@@ -140,8 +143,8 @@ describe('packBundle against the real bare-pack', () => {
 
     it('should stamp a content-hash id that only changes with the content', async () => {
       // Act
-      const a = await packBundle({ entry, packOptions: { base, hosts, linked: true }, convertEsmToCjs: true })
-      const b = await packBundle({ entry, packOptions: { base, hosts, linked: true }, convertEsmToCjs: true })
+      const a = await packBundle({ entry, packOptions: { base, hosts, linked: true }, convertEsmToCjs: true, minify: true })
+      const b = await packBundle({ entry, packOptions: { base, hosts, linked: true }, convertEsmToCjs: true, minify: true })
       const readable = await packBundle({ entry, packOptions: { base, hosts, linked: true }, convertEsmToCjs: true, minify: false })
 
       // Assert
@@ -161,6 +164,19 @@ describe('packBundle against the real bare-pack', () => {
       expect([...result.bundle.keys()]).toContain('/node_modules/esm-dep/extra.mjs')
       expect(readFile(result.bundle, '/node_modules/esm-dep/extra.mjs')).toBe("export default 'extra-loaded'\n")
       expect((JSON.parse(readFile(result.bundle, '/node_modules/esm-dep/package.json')) as { type?: string }).type).toBe('module')
+      expect(result.esmToCjs).toBeNull()
+    })
+
+    it('should minify JavaScript and compact JSON without converting ESM', async () => {
+      // Act
+      const result = await packBundle({ entry, packOptions: { base, hosts, linked: true }, minify: true })
+
+      // Assert
+      expect([...result.bundle.keys()]).toContain('/node_modules/esm-dep/extra.mjs')
+      const code = readFile(result.bundle, '/node_modules/esm-dep/extra.mjs')
+      expect(code).not.toBe("export default 'extra-loaded'\n")
+      expect(code).toMatch(/^export default/)
+      expect(readFile(result.bundle, '/data.json')).toBe('{"answer":42}')
       expect(result.esmToCjs).toBeNull()
     })
   })

@@ -104,6 +104,7 @@ export interface WdkBundleConfig {
 
   /** Build options */
   options?: {
+    /** Minify JavaScript and compact JSON while packing. Defaults to false. */
     minify?: boolean
     sourceMaps?: boolean
     targets?: string[]
