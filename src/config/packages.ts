@@ -10,10 +10,12 @@ export function getPackageList (config: WdkBundleConfig): string[] {
   // Add core (always required implicitly, unless overriden/preloaded logic changes)
   // For validation, we should probably check it.
   packages.add('@tetherto/wdk')
-  packages.add('bare-node-runtime')
-  // Both transport entries require the Pear Worklet runtime unconditionally
-  // (hrpc → @tetherto/pear-wrk-wdk/worklet, jsonrpc → @tetherto/pear-wrk-wdk/jsonrpc)
+  packages.add('bare-wdk-runtime')
+  // The entry requires the Pear Worklet runtime unconditionally
+  // (@tetherto/pear-wrk-wdk/worklet)
   packages.add('@tetherto/pear-wrk-wdk')
+  // bare-stow's shim, the first module of the bundle, requires it
+  packages.add('bare-stow-runtime')
 
   if (config.networks) {
     for (const net of Object.values(config.networks)) {

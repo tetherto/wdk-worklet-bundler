@@ -7,7 +7,7 @@ import path from 'path'
 import { pathToFileURL } from 'url'
 import type { WdkBundleConfig, ResolvedConfig } from './types'
 import { validateConfig } from './schema'
-import { DEFAULT_BUNDLE_PATH, DEFAULT_BUNDLE_PATH_JSONRPC, DEFAULT_TYPES_PATH, DEFAULT_IOS_ADDONS_DIR, DEFAULT_MACOS_ADDONS_DIR, DEFAULT_ANDROID_ADDONS_DIR, DEFAULT_LINUX_ADDONS_DIR, DEFAULT_WINDOWS_ADDONS_DIR, DEFAULT_ADDONS_YML_PATH } from '../constants'
+import { DEFAULT_PACKAGE_PATH } from '../constants'
 
 const CONFIG_FILES = [
   'wdk.config.js',
@@ -56,15 +56,34 @@ async function loadConfigFile (filepath: string): Promise<WdkBundleConfig> {
  * generators, so the runtime `.mjs` loader patch emitted into the entry
  * always matches what was actually done to the bundle.
  *
- * Opt-in and independent of transport and platform: enable it whenever any
- * target engine's Bare port can't load ESM (JSC, QuickJS), leave it off for
- * ESM-capable engines (V8).
+ * Independent of transport and platform. The default follows the engine: off
+ * for V8, which loads ESM, and on for the engines whose Bare port can't (JSC,
+ * QuickJS).
  */
 export function shouldConvertEsmToCjs (config: WdkBundleConfig): boolean {
-  return config.options?.convertEsmToCjs ?? false
+  return config.options?.convertEsmToCjs ?? (config.options?.engine ?? 'v8') !== 'v8'
 }
 
-export async function loadConfig (configPath?: string): Promise<ResolvedConfig> {
+/** Values given on the command line that replace the config file's. */
+export type ConfigOverrides = Partial<Pick<WdkBundleConfig, 'transport'>> & {
+  /**
+   * Folder with the package.json and node_modules the worklet is built from,
+   * relative to the current directory. Defaults to the folder of the config file.
+   */
+  projectRoot?: string
+}
+
+/**
+ * Load, validate and resolve the config file.
+ *
+ * @param configPath - Path of the config file. Defaults to the wdk.config.*
+ *   file of the current directory.
+ * @param overrides - Values that replace the config file's before validation.
+ * @throws {Error} If the file is missing, is not valid JSON, or the config,
+ *   with the overrides applied, is invalid.
+ * @throws {Error} If the project root given in the overrides does not exist.
+ */
+export async function loadConfig (configPath?: string, overrides: ConfigOverrides = {}): Promise<ResolvedConfig> {
   const cwd = process.cwd()
 
   // Find config file
@@ -87,39 +106,27 @@ export async function loadConfig (configPath?: string): Promise<ResolvedConfig> 
   }
 
   // Load config
-  const config = await loadConfigFile(filepath)
+  const config: WdkBundleConfig = {
+    ...await loadConfigFile(filepath),
+    ...(overrides.transport !== undefined ? { transport: overrides.transport } : {})
+  }
 
   // Validate config
   validateConfig(config)
 
-  const projectRoot = path.dirname(filepath)
+  const projectRoot = overrides.projectRoot !== undefined
+    ? path.resolve(cwd, overrides.projectRoot)
+    : path.dirname(filepath)
 
-  // Resolve output paths
-  const defaultBundlePath = config.transport === 'jsonrpc' ? DEFAULT_BUNDLE_PATH_JSONRPC : DEFAULT_BUNDLE_PATH
-  const resolvedOutput = {
-    bundle: path.resolve(
-      projectRoot,
-      config.output?.bundle || defaultBundlePath
-    ),
-    types: path.resolve(
-      projectRoot,
-      config.output?.types || DEFAULT_TYPES_PATH
-    ),
-    addons: {
-      ios: path.resolve(projectRoot, config.output?.addons?.ios || DEFAULT_IOS_ADDONS_DIR),
-      macos: path.resolve(projectRoot, config.output?.addons?.macos || DEFAULT_MACOS_ADDONS_DIR),
-      android: path.resolve(projectRoot, config.output?.addons?.android || DEFAULT_ANDROID_ADDONS_DIR),
-      linux: path.resolve(projectRoot, config.output?.addons?.linux || DEFAULT_LINUX_ADDONS_DIR),
-      windows: path.resolve(projectRoot, config.output?.addons?.windows || DEFAULT_WINDOWS_ADDONS_DIR)
-    },
-    addonsYml: path.resolve(projectRoot, config.output?.addonsYml || DEFAULT_ADDONS_YML_PATH)
+  if (!fs.existsSync(projectRoot)) {
+    throw new Error(`Project root not found: ${projectRoot}`)
   }
 
   return {
     ...config,
     configPath: filepath,
     projectRoot,
-    resolvedOutput
+    outputDir: path.resolve(path.dirname(filepath), config.output ?? DEFAULT_PACKAGE_PATH)
   }
 }
 

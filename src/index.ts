@@ -13,17 +13,9 @@ export { validateDependencies, installDependencies, uninstallDependencies, detec
 export type { ModuleInfo, ValidationResult, InstallResult, UninstallResult } from './validators/dependencies'
 
 // Bundler
-export { generateBundle, generateSourceFiles, linkAddons } from './bundler'
-export type { GenerateBundleOptions, GenerateBundleResult, LinkAddonsOptions, LinkAddonsResult } from './bundler'
-export { discoverLinkedAddons } from './bundler/linked-addons'
-export type { LinkedAddon } from './bundler/linked-addons'
-export { readBundle, writeBundleFile, wrapperForPath } from './bundler/bundle-file'
-export type { BundleWrapper } from './bundler/bundle-file'
-export { packBundle } from './bundler/pack'
-export type { PackBundleOptions, PackBundleResult, BarePackOptions, EsmToCjsStats, ConditionalSpecifier } from './bundler/pack'
+export { generateBundle, generateSourceFiles, stowBundle } from './bundler'
+export type { GenerateBundleOptions, GenerateBundleResult, StowBundleOptions, StowBundleResult, StowLanguage, BareRpcLimits, EsmToCjsStats } from './bundler'
 
 // Generators
 export { generateEntryPoint } from './generators/entry'
-export { generateJsonRpcEntryPoint } from './generators/entry-jsonrpc'
-export { generateAddonsYml } from './generators/addons-yml'
 export { generateWalletModulesCode } from './generators/wallet-modules'

@@ -7,24 +7,22 @@
 import { Command } from 'commander'
 import fs from 'fs'
 import path from 'path'
-import { DEFAULT_BUNDLE_BUILD_HOSTS, DEFAULT_BUNDLE_PATH, DEFAULT_TYPES_PATH, DEFAULT_OUTPUT_DIR } from './constants'
+import { DEFAULT_OUTPUT_DIR, DEFAULT_PACKAGE_PATH, LEGACY_RUNTIME_PACKAGE, RUNTIME_OVERRIDE_SPEC } from './constants'
 import { printBanner } from './utils/banner'
 import { getPackageList } from './config/packages'
-import { linkPlatformsForHosts } from './bundler/linked-addons'
+import type { WdkBundleConfig } from './config/types'
 import pkg from '../package.json'
 
 interface GenerateOptions {
   config?: string
+  projectRoot?: string
   install?: boolean
   keepArtifacts?: boolean
   dryRun?: boolean
   verbose?: boolean
-  types?: boolean
   sourceOnly?: boolean
   skipGeneration?: boolean
   transport?: string
-  linkAddons?: boolean
-  skipLinkAddons?: boolean
   deferOptionalPeers?: boolean
 }
 
@@ -34,6 +32,7 @@ interface InitOptions {
 
 interface ValidateOptions {
   config?: string
+  projectRoot?: string
 }
 
 interface ListModulesOptions {
@@ -46,22 +45,20 @@ interface CleanOptions {
 
 const program = new Command()
 
-program.name('wdk-worklet-bundler').description('CLI tool for generating WDK worklet bundles').version(pkg.version)
+program.name('wdk-worklet-bundler').description('CLI tool for generating WDK worklet packages').version(pkg.version)
 
 program
   .command('generate')
-  .description('Generate WDK bundle from configuration')
+  .description('Generate the WDK worklet package from configuration')
   .option('-c, --config <path>', 'Path to config file')
+  .option('--project-root <dir>', 'Folder with the package.json and node_modules to build from (default: the folder of the config file)')
   .option('--install', 'Auto-install missing dependencies')
   .option('--keep-artifacts', 'Keep intermediate generated files (useful for debugging)')
   .option('--dry-run', 'Show what would be generated without building')
   .option('-v, --verbose', 'Show verbose output')
-  .option('--no-types', 'Skip TypeScript declaration generation')
-  .option('--source-only', 'Only generate source files (skip bare-pack)')
+  .option('--source-only', 'Only generate source files (skip packing)')
   .option('--skip-generation', 'Skip artifact generation and use existing files')
-  .option('--transport <transport>', 'Transport type: hrpc (default) or jsonrpc')
-  .option('--link-addons', 'Link native addons via bare-link (default: true for jsonrpc)')
-  .option('--skip-link-addons', 'Skip bare-link addon linking (overrides jsonrpc default)')
+  .option('--transport <transport>', 'Transport: bare-rpc or hrpc (replaces the value of the config file)')
   .option('--no-defer-optional-peers', 'Fail on missing optional peer deps (e.g. Ledger support) instead of deferring them to runtime')
   .action(async (options: GenerateOptions) => {
     const { loadConfig } = await import('./config/loader')
@@ -71,7 +68,9 @@ program
       findMissingRequiredPeers,
       detectPackageManager,
       installablePackageRoot,
-      generateInstallCommand
+      generateInstallCommand,
+      writeRuntimeOverride,
+      toInstallSpec
     } = await import('./validators/dependencies')
     const { generateBundle, generateSourceFiles } = await import('./bundler')
 
@@ -108,29 +107,13 @@ program
 
     try {
       console.log('\n🔍 Reading configuration...\n')
-      let config = await loadConfig(options.config)
+      // --transport replaces the config file's value and is validated with it
+      const config = await loadConfig(options.config, {
+        transport: options.transport as WdkBundleConfig['transport'],
+        projectRoot: options.projectRoot
+      })
       console.log(`  Config: ${config.configPath}`)
-
-      // Apply CLI transport override
-      if (options.transport) {
-        if (!['hrpc', 'jsonrpc'].includes(options.transport)) {
-          console.error(`\n❌ Invalid transport '${options.transport}'. Use 'hrpc' or 'jsonrpc'`)
-          process.exit(1)
-        }
-        config = { ...config, transport: options.transport as 'hrpc' | 'jsonrpc' }
-      }
-
-      // Apply CLI addon overrides
-      if (options.linkAddons || options.skipLinkAddons) {
-        config = {
-          ...config,
-          options: {
-            ...config.options,
-            ...(options.linkAddons ? { linkAddons: true } : {}),
-            ...(options.skipLinkAddons ? { linkAddons: false } : {})
-          }
-        }
-      }
+      if (options.projectRoot !== undefined) console.log(`  Project root: ${config.projectRoot}`)
 
       console.log('\n📦 Checking core dependencies...\n')
       const requiredPackages = getPackageList(config)
@@ -154,7 +137,14 @@ program
 
         if (shouldInstall) {
           console.log('\n📥 Installing missing dependencies...\n')
-          const result = installDependencies(validation.missing, config.projectRoot, {
+
+          // The override must be in package.json before the install resolves
+          // the wallet packages' own bare-node-runtime dependency.
+          if (writeRuntimeOverride(config.projectRoot)) {
+            console.log(`  ✓ package.json: override ${LEGACY_RUNTIME_PACKAGE} → ${RUNTIME_OVERRIDE_SPEC}\n`)
+          }
+
+          const result = installDependencies(validation.missing.map(toInstallSpec), config.projectRoot, {
             verbose: options.verbose
           })
 
@@ -249,16 +239,15 @@ program
 
         console.log('\n✅ Source files generated successfully!\n')
         console.log(`  Entry: ${result.entryPath}`)
-        console.log('Run bare-pack manually to create the final bundle.\n')
+        console.log('Run generate without --source-only to pack it.\n')
         return
       }
 
-      console.log('\n🔧 Building bundle...\n')
+      console.log('\n🔧 Building package...\n')
 
       const result = await generateBundle(config, {
         dryRun: options.dryRun,
         verbose: options.verbose,
-        skipTypes: !options.types,
         skipGeneration: options.skipGeneration,
         deferOptionalPeers: options.deferOptionalPeers
       })
@@ -269,7 +258,7 @@ program
           const installable = installablePackageRoot(result.missingModule)
           if (installable != null) {
             const installCommand = generateInstallCommand(
-              [installable],
+              [toInstallSpec(installable)],
               detectPackageManager(config.projectRoot)
             )
             console.log('💡 This appears to be a required dependency that was not detected automatically.')
@@ -279,29 +268,20 @@ program
           process.exit(1)
         }
 
-        console.log('\n❌ Bundle generation failed:\n')
+        console.log('\n❌ Package generation failed:\n')
         console.log(result.error)
         process.exit(1)
       }
 
+      // A dry run wrote nothing: there is no package to report or clean up.
+      if (options.dryRun) return
+
       const sizeKB = (result.bundleSize / 1024).toFixed(1)
       const duration = (result.duration / 1000).toFixed(2)
 
-      console.log('\n✅ Bundle generated successfully!\n')
+      console.log('\n✅ Package generated successfully!\n')
+      console.log(`  Package: ${result.outputDir} (${config.language}, ${config.transport}, ${result.files.length} files)`)
       console.log(`  Bundle: ${result.bundlePath} (${sizeKB} KB)`)
-      if (options.types !== false) {
-        console.log(`  Types: ${result.typesPath}`)
-      }
-      const shouldLinkAddons = config.options?.linkAddons ?? (config.transport === 'jsonrpc')
-      if (shouldLinkAddons) {
-        const platforms = linkPlatformsForHosts(config.options?.targets ?? DEFAULT_BUNDLE_BUILD_HOSTS)
-        for (const p of platforms) {
-          console.log(`  Addons (${p}): ${config.resolvedOutput.addons[p]}`)
-        }
-        if (platforms.includes('ios')) {
-          console.log(`  addons.yml: ${config.resolvedOutput.addonsYml}`)
-        }
-      }
       console.log(`  Duration: ${duration}s\n`)
 
       // Cleanup intermediate files unless --keep-artifacts is set
@@ -309,22 +289,11 @@ program
         if (options.verbose) console.log('Cleaning up intermediate files...\n')
         const generatedDir = path.join(config.projectRoot, DEFAULT_OUTPUT_DIR)
 
-        // User-facing files that must survive cleanup — these are the
-        // documented import surface (`import { bundle } from './.wdk'`).
-        const KEEP = new Set(['index.js'])
-        if (options.types !== false) KEEP.add('index.d.ts')
-
-        if (fs.existsSync(generatedDir)) {
-          for (const entry of fs.readdirSync(generatedDir, { withFileTypes: true })) {
-            if (KEEP.has(entry.name)) continue
-            const entryPath = path.join(generatedDir, entry.name)
-            try {
-              fs.rmSync(entryPath, { recursive: true, force: true })
-              if (options.verbose) console.log(`  ✓ Removed ${entryPath}\n`)
-            } catch (e) {
-              console.log(`  ⚠️  Failed to cleanup ${entryPath}: ${String(e)}\n`)
-            }
-          }
+        try {
+          fs.rmSync(generatedDir, { recursive: true, force: true })
+          if (options.verbose) console.log(`  ✓ Removed ${generatedDir}\n`)
+        } catch (e) {
+          console.log(`  ⚠️  Failed to cleanup ${generatedDir}: ${String(e)}\n`)
         }
       } else {
         console.log(`ℹ️  Keeping intermediate files in ${DEFAULT_OUTPUT_DIR}\n`)
@@ -358,13 +327,14 @@ program
     fs.writeFileSync(configPath, configContent)
 
     console.log('\n✅ Created wdk.config.js\n')
-    console.log('  Edit the file to configure your networks and modules.\n')
+    console.log('  Edit the file to set the language and configure your networks and modules.\n')
   })
 
 program
   .command('validate')
   .description('Validate configuration without building')
   .option('-c, --config <path>', 'Path to config file')
+  .option('--project-root <dir>', 'Folder with the package.json and node_modules to check (default: the folder of the config file)')
   .action(async (options: ValidateOptions) => {
     const { loadConfig } = await import('./config/loader')
     const { validateDependencies } = await import('./validators/dependencies')
@@ -372,8 +342,9 @@ program
     try {
       console.log('\n🔍 Validating configuration...\n')
 
-      const config = await loadConfig(options.config)
+      const config = await loadConfig(options.config, { projectRoot: options.projectRoot })
       console.log(`  ✓ Config file valid: ${config.configPath}`)
+      if (options.projectRoot !== undefined) console.log(`  Project root: ${config.projectRoot}`)
 
       const requiredPackages = getPackageList(config)
       const validation = validateDependencies(requiredPackages, config.projectRoot)
@@ -486,23 +457,31 @@ function generateConfigTemplate (
  */
 
 module.exports = {
+  // Transport the worklet serves: 'bare-rpc' or 'hrpc'
+  transport: 'bare-rpc',
+
+  // Required: language of the generated host package, 'swift' or 'kotlin'
+  // language: '',
+
+  // Kotlin package of the generated code (kotlin only)
+  // kotlinPackage: 'to.tether.wdk.worklet',
+
   // Network mappings
   // Map logical network names to WDK wallet packages
   networks: {
 ${networksStr}
   },
 
-${preloadStr}  // Output paths (optional, defaults shown)
-  output: {
-    bundle: '${DEFAULT_BUNDLE_PATH}',
-    types: '${DEFAULT_TYPES_PATH}'
-  },
+${preloadStr}  // Folder of the generated package (optional, default shown).
+  // The Swift module is named after it: wdk-worklet → WdkWorklet
+  output: '${DEFAULT_PACKAGE_PATH}',
 
   // Build options (optional)
   options: {
-    // minify: false,
-    // sourceMaps: false,
-    targets: ${JSON.stringify(DEFAULT_BUNDLE_BUILD_HOSTS)}
+    // Hosts to build for. Default: every host of the language
+    // targets: ['ios-arm64', 'ios-arm64-simulator'],
+    // Experimental: 'javascriptcore' (swift) or 'quickjs' (kotlin)
+    // engine: 'v8',
   }
 };
 `

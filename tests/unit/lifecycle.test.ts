@@ -4,7 +4,6 @@ import path from 'path'
 import vm from 'vm'
 import { EventEmitter } from 'events'
 import { generateEntryPoint } from '../../src/generators/entry'
-import { generateJsonRpcEntryPoint } from '../../src/generators/entry-jsonrpc'
 import type { ResolvedConfig } from '../../src/config/types'
 
 interface Runtime {
@@ -17,10 +16,7 @@ interface Agent {
   resume: jest.Mock
 }
 
-describe.each([
-  ['hrpc', generateEntryPoint],
-  ['jsonrpc', generateJsonRpcEntryPoint]
-] as const)('%s lifecycle', (_transport, generate) => {
+describe('entry lifecycle', () => {
   let dir: string
 
   beforeEach(() => {
@@ -39,28 +35,23 @@ describe.each([
     logger: { info: jest.Mock, error: jest.Mock }
   }> {
     const config: ResolvedConfig = {
+      transport: 'bare-rpc',
+      language: 'swift',
       networks: {},
       configPath: path.join(dir, 'wdk.config.js'),
       projectRoot: dir,
-      resolvedOutput: {
-        bundle: path.join(dir, 'bundle.js'),
-        types: path.join(dir, 'types.d.ts'),
-        addons: { ios: '', macos: '', android: '', linux: '', windows: '' },
-        addonsYml: path.join(dir, 'addons.yml')
-      }
+      outputDir: path.join(dir, 'wdk-worklet')
     }
-    const entry = await generate(config, dir)
+    const entry = await generateEntryPoint(config, dir)
     const bare = new EventEmitter()
     const agents = Array.from({ length: 2 }, () => ({ suspend: jest.fn(), resume: jest.fn() }))
     const logger = { info: jest.fn(), error: jest.fn() }
     const requireStub = (id: string): unknown => {
-      if (id === 'bare-node-runtime/global') return {}
+      if (id === 'bare-wdk-runtime/global') return {}
       if (id === '@tetherto/wdk') return class WDK {}
-      if (id === '@tetherto/pear-wrk-wdk/worklet' || id === '@tetherto/pear-wrk-wdk/jsonrpc') {
+      if (id === '@tetherto/pear-wrk-wdk/worklet') {
         return {
-          HRPC: class HRPC {},
-          registerRpcHandlers: (): void => {},
-          registerJsonRpcHandlers: (): void => {},
+          createStart: () => (): void => {},
           utils: { logger }
         }
       }
@@ -68,14 +59,14 @@ describe.each([
     }
     const cache: Record<string, { exports: { globalAgent: Agent } }> = {
       'file:///app/node_modules/bare-http1/index.js': { exports: { globalAgent: agents[0] } },
-      'file:///app/node_modules/bare-node-runtime/node_modules/bare-https/index.js': { exports: { globalAgent: agents[1] } }
+      'file:///app/node_modules/bare-wdk-runtime/node_modules/bare-https/index.js': { exports: { globalAgent: agents[1] } }
     }
     requireStub.cache = cache
     const code = fs.readFileSync(entry, 'utf8')
     const context = vm.runInNewContext(code + '\ncontext', {
       require: requireStub,
       Bare: bare,
-      BareKit: { IPC: {} },
+      module: { exports: {} },
       process: new EventEmitter(),
       console: { log: jest.fn(), error: jest.fn() }
     }) as { moduleRuntime?: Runtime }

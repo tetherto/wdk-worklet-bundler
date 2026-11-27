@@ -2,23 +2,15 @@ import { getPackageList } from '../../src/config/packages'
 import type { WdkBundleConfig } from '../../src/config/types'
 
 const makeConfig = (overrides: Partial<WdkBundleConfig> = {}): WdkBundleConfig =>
-  ({ networks: {}, ...overrides })
+  ({ transport: 'bare-rpc', language: 'swift', networks: {}, ...overrides })
 
 describe('getPackageList', () => {
-  it('always includes the core packages and the Pear Worklet runtime', () => {
+  it('always includes the WDK, its runtime, the Pear Worklet package and the runtime of bare-stow\'s shim', () => {
     const packages = getPackageList(makeConfig())
 
-    expect(packages).toContain('@tetherto/wdk')
-    expect(packages).toContain('bare-node-runtime')
-    // Both transport entries require it unconditionally, so it must be
-    // validated/installed upfront instead of surfacing as a bare-pack failure
-    expect(packages).toContain('@tetherto/pear-wrk-wdk')
-  })
-
-  it('includes the Pear Worklet runtime regardless of transport', () => {
-    for (const transport of ['hrpc', 'jsonrpc'] as const) {
-      expect(getPackageList(makeConfig({ transport }))).toContain('@tetherto/pear-wrk-wdk')
-    }
+    // The entry and the shim require them whatever the config, so they are
+    // validated and installed upfront instead of surfacing as a packing failure
+    expect(packages).toEqual(['@tetherto/wdk', 'bare-wdk-runtime', '@tetherto/pear-wrk-wdk', 'bare-stow-runtime'])
   })
 
   it('collects network, protocol, module and preload packages without duplicates', () => {

@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { execFileSync } from 'child_process'
+import { INSTALL_SPECS, LEGACY_RUNTIME_PACKAGE, RUNTIME_OVERRIDE_SPEC } from '../constants'
 
 interface PackageJson {
   name: string
@@ -82,13 +83,21 @@ export function resolveModule (
  * the names of every installed package. Walked once and queried by name.
  */
 export function collectInstalledPackages (projectRoot: string): Set<string> {
-  const installed = new Set<string>()
+  return new Set(collectInstalledPackageDirs(projectRoot).keys())
+}
+
+/**
+ * Walk the entire node_modules tree — root, nested, and scoped — and collect
+ * the folders of every installed package, by the name it is installed under.
+ */
+function collectInstalledPackageDirs (projectRoot: string): Map<string, string[]> {
+  const installed = new Map<string, string[]>()
   const stack: string[] = [path.join(projectRoot, 'node_modules')]
   const visited = new Set<string>()
 
   const addPackage = (pkgDir: string, name: string): void => {
     if (fs.existsSync(path.join(pkgDir, 'package.json'))) {
-      installed.add(name)
+      installed.set(name, [...installed.get(name) ?? [], pkgDir])
     }
     stack.push(path.join(pkgDir, 'node_modules'))
   }
@@ -139,6 +148,27 @@ export function collectInstalledPackages (projectRoot: string): Set<string> {
   }
 
   return installed
+}
+
+/**
+ * Find the real `bare-node-runtime` in the install tree: the folders it is
+ * installed under whose own package.json carries that name. A folder of that
+ * name that holds `bare-wdk-runtime`, as the npm override or an alias installs
+ * it, does not count.
+ *
+ * @returns The folders, empty when the package is not installed.
+ */
+export function findLegacyRuntime (projectRoot: string): string[] {
+  const dirs = collectInstalledPackageDirs(projectRoot).get(LEGACY_RUNTIME_PACKAGE) ?? []
+
+  return dirs.filter((dir) => {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as PackageJson
+      return pkg.name === LEGACY_RUNTIME_PACKAGE
+    } catch {
+      return false
+    }
+  })
 }
 
 export function validateDependencies (
@@ -291,7 +321,7 @@ export function scanPeerDependencies (
           // Peers explicitly marked optional via peerDependenciesMeta are
           // only needed for opt-in features (e.g. Ledger hardware signing
           // in @bitcoinerlab/descriptors) — never report them as missing,
-          // but track them so bare-pack can defer their resolution.
+          // but track them so bare-stow can defer their resolution.
           if (isOptional) {
             // skipOptional: caller only wants .missing — don't trigger the
             // node_modules walk or collect deferral candidates.
@@ -394,6 +424,14 @@ export function installablePackageRoot (specifier: string): string | null {
   return segments[0]
 }
 
+/**
+ * What to ask the package manager for to install a package: its name, or the
+ * spec this line of the bundler needs for it (see INSTALL_SPECS).
+ */
+export function toInstallSpec (name: string): string {
+  return INSTALL_SPECS[name] ?? name
+}
+
 export function generateInstallCommand (
   missing: string[],
   packageManager: 'npm' | 'yarn' | 'pnpm' = 'npm'
@@ -414,6 +452,28 @@ export function generateInstallCommand (
     default:
       return `npm install ${packages.join(' ')}`
   }
+}
+
+/**
+ * Write the npm override that redirects `bare-node-runtime` to
+ * `bare-wdk-runtime` into the project's package.json, creating the file when
+ * there is none. An override the project already sets for that package is
+ * left as it is.
+ *
+ * @returns Whether package.json was written.
+ * @throws {SyntaxError} If package.json exists and is not valid JSON.
+ */
+export function writeRuntimeOverride (projectRoot: string): boolean {
+  const pkgPath = path.join(projectRoot, 'package.json')
+  const source = fs.existsSync(pkgPath) ? fs.readFileSync(pkgPath, 'utf-8') : '{}'
+  const pkg = JSON.parse(source) as { overrides?: Record<string, unknown> }
+
+  if (pkg.overrides?.[LEGACY_RUNTIME_PACKAGE] !== undefined) return false
+
+  pkg.overrides = { ...pkg.overrides, [LEGACY_RUNTIME_PACKAGE]: RUNTIME_OVERRIDE_SPEC }
+  const indent = /^([ \t]+)"/m.exec(source)?.[1] ?? '  '
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, indent) + '\n')
+  return true
 }
 
 export interface InstallResult {

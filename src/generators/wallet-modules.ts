@@ -15,11 +15,11 @@ function toVarName (pkg: string): string {
 /**
  * Generate wallet modules code section.
  *
- * WDK core is loaded eagerly (same as pear-wrk-wdk-jsonrpc).
- * Wallet packages are loaded lazily via a Proxy — this matches the pattern
- * used in pear-wrk-wdk-jsonrpc and avoids the async ES-module evaluation
- * issue that occurs when packages with "type":"module" and bare.js entries
- * are required at bundle top-level before the runtime is fully settled.
+ * WDK core is loaded eagerly.
+ * Wallet packages are loaded lazily via a Proxy — this avoids the async
+ * ES-module evaluation issue that occurs when packages with "type":"module"
+ * and bare.js entries are required at bundle top-level before the runtime is
+ * fully settled.
  */
 export function generateWalletModulesCode (config: ResolvedConfig): string {
   const lines: string[] = []
@@ -32,12 +32,12 @@ export function generateWalletModulesCode (config: ResolvedConfig): string {
     lines.push('')
   }
 
-  // WDK core — eager load with error capture (same pattern as pear-wrk-wdk-jsonrpc)
+  // WDK core — eager load with error capture
   lines.push('// Load WDK core')
   lines.push('let WDK = null')
   lines.push('let wdkLoadError = null')
   lines.push('try {')
-  lines.push("  const _wdkModule = require('@tetherto/wdk', { with: { imports: 'bare-node-runtime/imports' } })")
+  lines.push("  const _wdkModule = require('@tetherto/wdk', { with: { imports: 'bare-wdk-runtime/imports' } })")
   lines.push('  WDK = _wdkModule.default || _wdkModule.WDK || _wdkModule')
   lines.push('} catch (_err) {')
   lines.push('  wdkLoadError = _err')
@@ -65,7 +65,7 @@ export function generateWalletModulesCode (config: ResolvedConfig): string {
   lines.push("  if (_walletCache[network]) return _walletCache[network]")
   lines.push('  let _mod')
   for (const { network, pkg } of networkPackages) {
-    lines.push(`  if (network === '${network}') _mod = require('${pkg}', { with: { imports: 'bare-node-runtime/imports' } })`)
+    lines.push(`  if (network === '${network}') _mod = require('${pkg}', { with: { imports: 'bare-wdk-runtime/imports' } })`)
   }
   lines.push('  if (_mod) _walletCache[network] = _mod.default || _mod')
   lines.push('  return _walletCache[network] || null')

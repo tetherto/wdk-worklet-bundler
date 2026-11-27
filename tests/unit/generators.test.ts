@@ -1,14 +1,16 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import vm from 'vm'
 import { generateWalletModulesCode } from '../../src/generators/wallet-modules'
 import { generateModuleModulesCode } from '../../src/generators/module-modules'
 import { generateEntryPoint } from '../../src/generators/entry'
-import { generateJsonRpcEntryPoint } from '../../src/generators/entry-jsonrpc'
 import type { ResolvedConfig } from '../../src/config/types'
 
 describe('Code Generators', () => {
   const createMockConfig = (overrides?: Partial<ResolvedConfig>): ResolvedConfig => ({
+    transport: 'bare-rpc',
+    language: 'swift',
     networks: {
       ethereum: {
         package: '@tetherto/wdk-wallet-evm-erc-4337'
@@ -20,18 +22,7 @@ describe('Code Generators', () => {
     protocols: {},
     configPath: '/test/wdk.config.js',
     projectRoot: '/test',
-    resolvedOutput: {
-      bundle: '/test/.wdk/wdk.bundle.js',
-      types: '/test/.wdk/wdk.d.ts',
-      addons: {
-        ios: '/test/ios/addons',
-        macos: '/test/macos/addons',
-        android: '/test/android/addons',
-        linux: '/test/linux/addons',
-        windows: '/test/windows/addons'
-      },
-      addonsYml: '/test/addons.yml'
-    },
+    outputDir: '/test/wdk-worklet',
     ...overrides
   })
 
@@ -40,7 +31,7 @@ describe('Code Generators', () => {
       const config = createMockConfig()
       const code = generateWalletModulesCode(config)
 
-      expect(code).toContain("const _wdkModule = require('@tetherto/wdk', { with: { imports: 'bare-node-runtime/imports' } })")
+      expect(code).toContain("const _wdkModule = require('@tetherto/wdk', { with: { imports: 'bare-wdk-runtime/imports' } })")
       expect(code).toContain('WDK = _wdkModule.default || _wdkModule.WDK || _wdkModule')
     })
 
@@ -48,7 +39,7 @@ describe('Code Generators', () => {
       const config = createMockConfig()
       const code = generateWalletModulesCode(config)
 
-      expect(code).toContain("if (network === 'ethereum') _mod = require('@tetherto/wdk-wallet-evm-erc-4337', { with: { imports: 'bare-node-runtime/imports' } })")
+      expect(code).toContain("if (network === 'ethereum') _mod = require('@tetherto/wdk-wallet-evm-erc-4337', { with: { imports: 'bare-wdk-runtime/imports' } })")
       expect(code).toContain('if (_mod) _walletCache[network] = _mod.default || _mod')
     })
 
@@ -107,7 +98,7 @@ describe('Code Generators', () => {
 
     it('requires the module package and builds the manager', () => {
       const code = generateModuleModulesCode(withModules())
-      expect(code).toContain("const WdkP2pAddressBookRaw = require('@tetherto/wdk-p2p-address-book', { with: { imports: 'bare-node-runtime/imports' }})")
+      expect(code).toContain("const WdkP2pAddressBookRaw = require('@tetherto/wdk-p2p-address-book', { with: { imports: 'bare-wdk-runtime/imports' }})")
       expect(code).toContain("moduleManagers['addressBook'] = {")
     })
 
@@ -201,17 +192,93 @@ describe('Code Generators', () => {
       const entryPath = await generateEntryPoint(config, tempDir)
       const content = fs.readFileSync(entryPath, 'utf-8')
 
-      expect(content).toContain("require('bare-node-runtime/global')")
+      expect(content).toContain("require('bare-wdk-runtime/global')")
       expect(content).toContain("require('@tetherto/pear-wrk-wdk/worklet'")
     })
 
-    it('should include RPC handlers', async () => {
+    it('should end by exporting the start function made by createStart, and wire no transport itself', async () => {
       const config = createMockConfig()
       const entryPath = await generateEntryPoint(config, tempDir)
       const content = fs.readFileSync(entryPath, 'utf-8')
 
-      expect(content).toContain('registerRpcHandlers(rpc, context)')
-      expect(content).toContain('const rpc = new HRPC(BareIPC)')
+      expect(content.endsWith("logger.info('Worklet started');\n\nmodule.exports = createStart(context);")).toBe(true)
+      expect(content).not.toContain('HRPC')
+      expect(content).not.toContain('registerRpcHandlers')
+      expect(content).not.toContain('BareKit')
+    })
+
+    it('should generate the same entry for both transports, apart from the timestamp line', async () => {
+      const withoutTimestamp = (content: string): string => content.replace(/^\/\/ Generated at: .*\n/m, '')
+      const bareRpcDir = path.join(tempDir, 'bare-rpc')
+      const hrpcDir = path.join(tempDir, 'hrpc')
+
+      const bareRpc = fs.readFileSync(await generateEntryPoint(createMockConfig({ transport: 'bare-rpc' }), bareRpcDir), 'utf-8')
+      const hrpc = fs.readFileSync(await generateEntryPoint(createMockConfig({ transport: 'hrpc' }), hrpcDir), 'utf-8')
+
+      expect(withoutTimestamp(hrpc)).toBe(withoutTimestamp(bareRpc))
+      expect(bareRpc).not.toBe(withoutTimestamp(bareRpc))
+    })
+
+    describe('when the generated entry runs', () => {
+      const start = (): void => {}
+
+      /**
+       * Run the generated entry with a stubbed require, as Bare would load it,
+       * and return what it gave createStart and what it exported.
+       */
+      async function run (config: ResolvedConfig, loadWdk: () => unknown): Promise<{ context: Record<string, unknown>, exported: unknown }> {
+        const code = fs.readFileSync(await generateEntryPoint(config, tempDir), 'utf-8')
+        const createStart = jest.fn<() => void, [Record<string, unknown>]>(() => start)
+        const module = { exports: {} as unknown }
+        const requireStub = (id: string): unknown => {
+          if (id === 'bare-wdk-runtime/global') return {}
+          if (id === '@tetherto/wdk') return loadWdk()
+          if (id === '@tetherto/pear-wrk-wdk/worklet') return { createStart, utils: { logger: { info: (): void => {}, error: (): void => {} } } }
+          throw new Error('Unexpected require: ' + id)
+        }
+        requireStub.cache = {}
+
+        vm.runInNewContext(code, { require: requireStub, module, console: { log: (): void => {}, error: (): void => {} } })
+
+        return { context: createStart.mock.calls[0][0], exported: module.exports }
+      }
+
+      it('should export the start function createStart returned', async () => {
+        const { exported } = await run(createMockConfig(), () => class WDK {})
+
+        expect(exported).toBe(start)
+      })
+
+      it('should pass a null wdkLoadError and the WDK class when the WDK loads', async () => {
+        class WDK {}
+
+        const { context } = await run(createMockConfig(), () => WDK)
+
+        expect(context.wdkLoadError).toBeNull()
+        expect(context.WDK).toBe(WDK)
+      })
+
+      it('should pass the error the WDK threw while loading as wdkLoadError', async () => {
+        const loadError = new Error('Unsupported operation')
+
+        const { context } = await run(createMockConfig(), () => { throw loadError })
+
+        expect(context.wdkLoadError).toBe(loadError)
+        expect(context.WDK).toBeNull()
+      })
+
+      it('should pass debug: false in the context by default', async () => {
+        const { context } = await run(createMockConfig(), () => class WDK {})
+
+        expect(context.debug).toBe(false)
+      })
+
+      it('should pass debug: true in the context when options.debug is set', async () => {
+        const { context } = await run(createMockConfig({ options: { debug: true } }), () => class WDK {})
+
+        expect(context.debug).toBe(true)
+      })
+
     })
 
     it('should include wallet modules code', async () => {
@@ -303,16 +370,6 @@ describe('Code Generators', () => {
     })
 
     describe('options.handleLeakCheck', () => {
-      it('should emit no trace of the handle-leak diagnostic when unset', async () => {
-        const config = createMockConfig()
-        const entryPath = await generateEntryPoint(config, tempDir)
-        const content = fs.readFileSync(entryPath, 'utf-8')
-
-        expect(content).not.toContain('registerHandleLeakCheck')
-        expect(content).not.toContain('diagnostics/handle-leak-check')
-        expect(content).toContain("const { HRPC, registerRpcHandlers, utils } = require('@tetherto/pear-wrk-wdk/worklet'")
-      })
-
       it('should include the require and registerHandleLeakCheck() call when enabled and resolvable', async () => {
         const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wdk-entry-handle-leak-proj-'))
         const pkgDir = path.join(projectRoot, 'node_modules/@tetherto/pear-wrk-wdk')
@@ -339,66 +396,6 @@ describe('Code Generators', () => {
         }
       })
 
-      it('should warn and omit the diagnostic when enabled but unresolvable, without failing generation', async () => {
-        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        const config = createMockConfig({ options: { handleLeakCheck: true } })
-
-        const entryPath = await generateEntryPoint(config, tempDir)
-        const content = fs.readFileSync(entryPath, 'utf-8')
-
-        expect(content).not.toContain('registerHandleLeakCheck')
-        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('options.handleLeakCheck is set'))
-        warnSpy.mockRestore()
-      })
-    })
-  })
-
-  describe('generateJsonRpcEntryPoint', () => {
-    let tempDir: string
-
-    beforeEach(() => {
-      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wdk-jsonrpc-entry-test-'))
-    })
-
-    afterEach(() => {
-      fs.rmSync(tempDir, { recursive: true, force: true })
-    })
-
-    it('wires modules and their allowlist into the JSON-RPC context', async () => {
-      const config = createMockConfig({
-        transport: 'jsonrpc',
-        modules: {
-          addressBook: {
-            package: '@tetherto/wdk-p2p-address-book',
-            factory: 'createWorkletModule',
-            events: ['update']
-          }
-        },
-        allowedModuleMethods: {
-          addressBook: { methods: ['list', 'add'] }
-        }
-      })
-
-      const entryPath = await generateJsonRpcEntryPoint(config, tempDir)
-      const content = fs.readFileSync(entryPath, 'utf-8')
-
-      expect(content).toContain('// Transport: jsonrpc')
-      expect(content).toContain("require('@tetherto/wdk-p2p-address-book'")
-      expect(content).toContain("moduleManagers['addressBook'] = {")
-      expect(content).toContain('moduleManagers: typeof moduleManagers !== \'undefined\' ? moduleManagers : {}')
-      expect(content).toContain('allowedModuleMethods: {"addressBook":{"methods":["list","add"]}}')
-      expect(content).toContain('registerJsonRpcHandlers(BareIPC, context)')
-      expect(content).toContain("runLifecycle(context.moduleRuntime, 'suspendAll')")
-      expect(content).toContain("runLifecycle(context.moduleRuntime, 'resumeAll')")
-    })
-
-    it('defaults modules and their allowlist to empty maps', async () => {
-      const entryPath = await generateJsonRpcEntryPoint(createMockConfig({ transport: 'jsonrpc' }), tempDir)
-      const content = fs.readFileSync(entryPath, 'utf-8')
-
-      expect(content).toContain('// No modules configured')
-      expect(content).toContain("moduleManagers: typeof moduleManagers !== 'undefined' ? moduleManagers : {}")
-      expect(content).toContain('allowedModuleMethods: {}')
     })
   })
 })
